@@ -15,6 +15,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # LLM Provider 选择
+    llm_provider: str = Field(
+        default="claude",
+        description="LLM Provider: claude, qwen, gemini, ollama, opencode",
+    )
+
     # Claude API
     anthropic_api_key: str = Field(default="", description="Anthropic API Key")
     claude_model: str = Field(
@@ -30,17 +36,30 @@ class Settings(BaseSettings):
         1. 环境变量 ANTHROPIC_API_KEY
         2. Claude Code OAuth 凭据
         """
-        # 优先使用环境变量
         if self.anthropic_api_key:
             return self.anthropic_api_key
 
-        # 尝试读取 Claude Code 凭据
         from lifee.providers.auth import get_api_key_from_credentials
         return get_api_key_from_credentials()
 
-    # Gemini API (后续使用)
+    # Qwen API (阿里通义千问，免费 2000/天)
+    qwen_api_key: str = Field(default="", description="Qwen/DashScope API Key")
+    qwen_model: str = Field(default="qwen-plus", description="Qwen 模型名称")
+
+    # Gemini API (Google)
     google_api_key: str = Field(default="", description="Google API Key")
-    gemini_model: str = Field(default="gemini-pro", description="Gemini 模型名称")
+    gemini_model: str = Field(default="gemini-2.0-flash", description="Gemini 模型名称")
+
+    # Ollama (本地，完全免费)
+    ollama_model: str = Field(default="qwen2.5", description="Ollama 模型名称")
+    ollama_base_url: str = Field(
+        default="http://localhost:11434/v1",
+        description="Ollama API 地址",
+    )
+
+    # OpenCode Zen
+    opencode_api_key: str = Field(default="", description="OpenCode API Key")
+    opencode_model: str = Field(default="claude-opus-4-5", description="OpenCode 模型名称")
 
     # OpenAI Embedding (用于 RAG)
     openai_api_key: str = Field(default="", description="OpenAI API Key")

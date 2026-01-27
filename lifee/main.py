@@ -8,11 +8,75 @@ if sys.platform == "win32":
     sys.stdin.reconfigure(encoding="utf-8")
 
 from lifee.config.settings import settings
-from lifee.providers import ClaudeProvider, Message, MessageRole
+from lifee.providers import (
+    LLMProvider,
+    Message,
+    MessageRole,
+    ClaudeProvider,
+    QwenProvider,
+    OllamaProvider,
+    OpenCodeZenProvider,
+    GeminiProvider,
+)
 from lifee.sessions import Session, SessionStore
 
 
-async def chat_loop(provider: ClaudeProvider, session: Session):
+def create_provider() -> LLMProvider:
+    """根据配置创建 LLM Provider"""
+    provider_name = settings.llm_provider.lower()
+
+    if provider_name == "claude":
+        api_key = settings.get_anthropic_api_key()
+        if not api_key:
+            print("\n错误: 未找到 Claude 认证凭据")
+            print("解决方法:")
+            print("  1. 运行 'claude login' 登录 Claude Code")
+            print("  2. 或设置环境变量 ANTHROPIC_API_KEY")
+            sys.exit(1)
+        return ClaudeProvider(api_key=api_key, model=settings.claude_model)
+
+    elif provider_name == "qwen":
+        if not settings.qwen_api_key:
+            print("\n错误: 未找到 Qwen API Key")
+            print("解决方法:")
+            print("  在 .env 文件中设置 QWEN_API_KEY")
+            print("  获取地址: https://dashscope.console.aliyun.com/")
+            sys.exit(1)
+        return QwenProvider(api_key=settings.qwen_api_key, model=settings.qwen_model)
+
+    elif provider_name == "gemini":
+        if not settings.google_api_key:
+            print("\n错误: 未找到 Google API Key")
+            print("解决方法:")
+            print("  在 .env 文件中设置 GOOGLE_API_KEY")
+            print("  获取地址: https://aistudio.google.com/apikey")
+            sys.exit(1)
+        return GeminiProvider(api_key=settings.google_api_key, model=settings.gemini_model)
+
+    elif provider_name == "ollama":
+        return OllamaProvider(
+            model=settings.ollama_model,
+            base_url=settings.ollama_base_url,
+        )
+
+    elif provider_name == "opencode":
+        if not settings.opencode_api_key:
+            print("\n错误: 未找到 OpenCode API Key")
+            print("解决方法:")
+            print("  在 .env 文件中设置 OPENCODE_API_KEY")
+            sys.exit(1)
+        return OpenCodeZenProvider(
+            api_key=settings.opencode_api_key,
+            model=settings.opencode_model,
+        )
+
+    else:
+        print(f"\n错误: 未知的 Provider: {provider_name}")
+        print("支持的 Provider: claude, qwen, gemini, ollama, opencode")
+        sys.exit(1)
+
+
+async def chat_loop(provider: LLMProvider, session: Session):
     """主对话循环"""
     print("\n" + "=" * 50)
     print("LIFEE - 辩论式 AI 决策助手")
@@ -101,23 +165,12 @@ async def chat_loop(provider: ClaudeProvider, session: Session):
 
 async def main():
     """主函数"""
-    # 获取 API Key
-    api_key = settings.get_anthropic_api_key()
-    if not api_key:
-        print("\n错误: 未找到有效的认证凭据")
-        print("解决方法:")
-        print("  1. 运行 'claude login' 登录 Claude Code")
-        print("  2. 或设置环境变量 ANTHROPIC_API_KEY")
-        sys.exit(1)
-
-    # 初始化 Provider
-    provider = ClaudeProvider(
-        api_key=api_key,
-        model=settings.claude_model,
-    )
+    # 创建 Provider
+    provider = create_provider()
 
     # 显示模型信息
-    print(f"\n[模型] {provider.model}")
+    print(f"\n[Provider] {provider.name}")
+    print(f"[模型] {provider.model}")
 
     # 初始化会话存储（Phase 1 使用内存存储）
     store = SessionStore(storage_dir=None)

@@ -1,9 +1,16 @@
 """认证模块 - 读取 Claude Code CLI 凭据"""
 import json
 import time
+import urllib.request
+import urllib.error
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Optional
+
+
+# Anthropic OAuth 配置（来自 clawdbot/pi-ai）
+OAUTH_TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
+OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
 
 @dataclass
@@ -72,9 +79,98 @@ def read_claude_code_credentials() -> Optional[OAuthCredentials]:
         return None
 
 
+def save_credentials(creds: OAuthCredentials) -> bool:
+    """
+    保存刷新后的凭据到文件
+
+    Args:
+        creds: 新的凭据
+
+    Returns:
+        是否保存成功
+    """
+    cred_path = get_claude_credentials_path()
+
+    if not cred_path.exists():
+        return False
+
+    try:
+        with open(cred_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if "claudeAiOauth" not in data:
+            return False
+
+        data["claudeAiOauth"]["accessToken"] = creds.access_token
+        data["claudeAiOauth"]["expiresAt"] = creds.expires_at
+        if creds.refresh_token:
+            data["claudeAiOauth"]["refreshToken"] = creds.refresh_token
+
+        with open(cred_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+        return True
+
+    except (json.JSONDecodeError, IOError):
+        return False
+
+
+def refresh_oauth_token(refresh_token: str) -> Optional[OAuthCredentials]:
+    """
+    使用 refresh token 刷新 OAuth 凭据
+
+    Args:
+        refresh_token: 刷新令牌
+
+    Returns:
+        新的 OAuthCredentials 或 None（刷新失败）
+    """
+    payload = json.dumps({
+        "grant_type": "refresh_token",
+        "client_id": OAUTH_CLIENT_ID,
+        "refresh_token": refresh_token,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        OAUTH_TOKEN_URL,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "claude-cli/2.1.2 (external, cli)",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        access_token = data.get("access_token")
+        new_refresh_token = data.get("refresh_token")
+        expires_in = data.get("expires_in", 3600)
+
+        if not access_token:
+            return None
+
+        # 计算过期时间（提前 5 分钟）
+        expires_at = int(time.time() * 1000) + (expires_in * 1000) - (5 * 60 * 1000)
+
+        return OAuthCredentials(
+            access_token=access_token,
+            refresh_token=new_refresh_token or refresh_token,
+            expires_at=expires_at,
+        )
+
+    except (urllib.error.URLError, json.JSONDecodeError, KeyError) as e:
+        print(f"[警告] Token 刷新失败: {e}")
+        return None
+
+
 def get_api_key_from_credentials() -> Optional[str]:
     """
     从 Claude Code 凭据获取 API Key（access token）
+
+    如果 token 已过期且有 refresh_token，会自动刷新并保存。
 
     Returns:
         access token 或 None
@@ -84,8 +180,23 @@ def get_api_key_from_credentials() -> Optional[str]:
         return None
 
     if creds.is_expired:
-        # TODO: 实现 token 刷新
-        return None
+        if not creds.refresh_token:
+            print("[错误] Token 已过期且无 refresh_token，请重新运行 'claude login'")
+            return None
+
+        print("[信息] Token 已过期，正在刷新...")
+        new_creds = refresh_oauth_token(creds.refresh_token)
+
+        if new_creds is None:
+            print("[错误] Token 刷新失败，请重新运行 'claude login'")
+            return None
+
+        if save_credentials(new_creds):
+            print("[信息] Token 刷新成功，凭据已更新")
+        else:
+            print("[警告] Token 刷新成功，但无法保存到文件")
+
+        return new_creds.access_token
 
     return creds.access_token
 
