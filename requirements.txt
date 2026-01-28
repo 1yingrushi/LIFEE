@@ -10,6 +10,8 @@ python-dotenv>=1.0.0   # 环境变量
 openai>=1.0.0          # OpenAI 兼容 API (Qwen, Ollama, OpenCode)
 google-genai>=1.0.0    # Google Gemini API
 
-# 后续添加
-# aiosqlite            # 异步 SQLite
-# numpy                # 向量计算
+# 工具
+httpx>=0.25.0          # HTTP 客户端
+
+# 知识库/RAG
+numpy>=1.24.0          # 向量计算（余弦相似度）

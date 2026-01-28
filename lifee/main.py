@@ -405,6 +405,8 @@ from lifee.providers import (
     read_clawdbot_synthetic_credentials,
 )
 from lifee.sessions import Session, SessionStore
+from lifee.roles import RoleManager
+from lifee.memory import MemoryManager, format_search_results
 
 
 def reload_settings():
@@ -516,17 +518,83 @@ def create_provider(provider_name: str = None) -> LLMProvider:
         sys.exit(1)
 
 
-async def chat_loop(provider: LLMProvider, session: Session) -> str:
+def select_role_interactive(role_manager: RoleManager, current_role: str) -> str:
+    """交互式选择角色"""
+    roles = role_manager.list_roles()
+
+    if not roles:
+        print("\n没有可用的角色")
+        print("创建角色: 在 lifee/roles/ 下创建目录，添加 SOUL.md 文件")
+        print("参考模板: lifee/roles/_template/")
+        return current_role
+
+    print("\n可用角色:\n")
+    print(f"  0. [无角色] (默认对话模式)")
+    for i, role in enumerate(roles, 1):
+        info = role_manager.get_role_info(role)
+        display_name = info.get("display_name", role)
+        current = " (当前)" if role == current_role else ""
+        print(f"  {i}. {role}{current}")
+        if display_name != role:
+            print(f"     名字: {display_name}")
+
+    print()
+
+    while True:
+        choice = input(f"请选择角色 (0-{len(roles)}，或 q 取消): ").strip()
+
+        if choice.lower() == 'q':
+            print("已取消")
+            return current_role
+
+        try:
+            idx = int(choice)
+            if idx == 0:
+                print("\n已切换到: [无角色]")
+                return ""
+            if 1 <= idx <= len(roles):
+                selected = roles[idx - 1]
+                print(f"\n已切换到: {selected}")
+                return selected
+        except ValueError:
+            pass
+
+        print("无效选择，请重新输入")
+
+
+async def chat_loop(
+    provider: LLMProvider,
+    session: Session,
+    current_role: str = "",
+    knowledge_manager: MemoryManager = None,
+) -> tuple[str, str]:
     """主对话循环
 
+    Args:
+        provider: LLM Provider
+        session: 会话对象
+        current_role: 当前角色名称
+        knowledge_manager: 角色知识库管理器
+
     Returns:
-        "" - 正常退出
-        provider_id - 需要切换到的新 Provider
+        (action, value):
+        - ("quit", "") - 正常退出
+        - ("switch_provider", provider_id) - 切换 Provider
+        - ("switch_role", role_name) - 切换角色
     """
+    role_manager = RoleManager()
+
+    # 显示欢迎信息
     print("\n" + "=" * 50)
     print("LIFEE - 辩论式 AI 决策助手")
     print("=" * 50)
-    print(f"当前: {provider.name} ({provider.model})")
+    print(f"Provider: {provider.name} ({provider.model})")
+    if current_role:
+        info = role_manager.get_role_info(current_role)
+        display_name = info.get("display_name", current_role)
+        print(f"角色: {display_name}")
+        if info.get("has_knowledge"):
+            print(f"知识库: 已启用")
     print("输入 /help 查看帮助，/quit 退出")
     print("=" * 50 + "\n")
 
@@ -543,21 +611,66 @@ async def chat_loop(provider: LLMProvider, session: Session) -> str:
                 cmd = user_input.lower()
                 if cmd == "/quit" or cmd == "/exit":
                     print("\n再见！")
-                    return ""
+                    return ("quit", "")
                 elif cmd == "/help":
                     print("\n命令列表:")
                     print("  /help    - 显示帮助")
                     print("  /history - 显示对话历史")
                     print("  /clear   - 清空对话历史")
+                    print("  /role    - 切换角色")
                     print("  /config  - 切换 LLM Provider")
                     print("  /model   - 切换当前 Provider 的模型")
+                    print("  /memory  - 显示知识库状态")
                     print("  /quit    - 退出程序")
                     print()
+                    continue
+                elif cmd == "/memory" or cmd.startswith("/memory "):
+                    if not knowledge_manager:
+                        print("\n当前角色没有知识库")
+                        print("创建方法: 在角色目录下创建 knowledge/ 目录，添加 .md 文件\n")
+                        continue
+                    # /memory status
+                    if cmd == "/memory":
+                        stats = knowledge_manager.get_stats()
+                        print("\n知识库状态:")
+                        print(f"  文件数: {stats['file_count']}")
+                        print(f"  分块数: {stats['chunk_count']}")
+                        print(f"  嵌入模型: {stats['embedding_provider']}/{stats['embedding_model']}")
+                        print()
+                        continue
+                    # /memory search <query>
+                    if cmd.startswith("/memory search "):
+                        query = user_input[15:].strip()
+                        if not query:
+                            print("\n用法: /memory search <查询内容>\n")
+                            continue
+                        print(f"\n搜索: {query}")
+                        results = await knowledge_manager.search(query, max_results=5)
+                        if not results:
+                            print("没有找到相关内容\n")
+                        else:
+                            print(f"找到 {len(results)} 条结果:\n")
+                            for i, r in enumerate(results, 1):
+                                print(f"[{i}] {Path(r.path).name}:{r.start_line}-{r.end_line} (分数: {r.score:.2f})")
+                                # 显示前 100 字符
+                                preview = r.text[:100].replace("\n", " ")
+                                print(f"    {preview}...")
+                                print()
+                        continue
+                    print("\n未知的 /memory 子命令")
+                    print("用法:")
+                    print("  /memory         - 显示知识库状态")
+                    print("  /memory search <query> - 搜索知识库\n")
+                    continue
+                elif cmd == "/role":
+                    new_role = select_role_interactive(role_manager, current_role)
+                    if new_role != current_role:
+                        return ("switch_role", new_role)
                     continue
                 elif cmd == "/config":
                     new_provider_id = select_provider_interactive(show_welcome=False)
                     if new_provider_id:
-                        return new_provider_id  # 返回新 Provider ID，触发切换
+                        return ("switch_provider", new_provider_id)
                     continue
                 elif cmd == "/model":
                     # 获取当前 Provider ID
@@ -572,7 +685,7 @@ async def chat_loop(provider: LLMProvider, session: Session) -> str:
 
                     new_model = select_model_for_provider(provider_id, current_model)
                     if new_model:
-                        return provider_id  # 触发重新加载
+                        return ("switch_provider", provider_id)
                     continue
                 elif cmd == "/history":
                     if not session.history:
@@ -599,10 +712,36 @@ async def chat_loop(provider: LLMProvider, session: Session) -> str:
             # 准备消息列表
             messages = session.get_messages()
 
-            # 系统提示词（简单版本）
-            system_prompt = """你是 LIFEE 的 AI 助手，一个辩论式决策助手。
+            # 构建系统提示词
+            base_prompt = """你是 LIFEE 的 AI 助手，一个辩论式决策助手。
 你的职责是帮助用户思考人生决策问题，提供多角度的观点和建议。
 保持友好、专业的态度，用中文回复。"""
+
+            # 如果有角色，加载角色配置
+            if current_role:
+                role_prompt = role_manager.load_role(current_role)
+                if role_prompt:
+                    system_prompt = role_prompt + "\n\n---\n\n" + base_prompt
+                else:
+                    system_prompt = base_prompt
+            else:
+                system_prompt = base_prompt
+
+            # 如果有知识库，搜索相关内容并注入
+            if knowledge_manager:
+                try:
+                    search_results = await knowledge_manager.search(
+                        user_input,
+                        max_results=3,
+                        min_score=0.35,
+                    )
+                    if search_results:
+                        knowledge_context = format_search_results(search_results)
+                        system_prompt = system_prompt + "\n\n---\n\n## 相关知识（供参考）\n\n" + knowledge_context
+                except Exception as e:
+                    # 搜索失败不影响对话
+                    if settings.debug:
+                        print(f"[知识库搜索失败: {e}]")
 
             # 流式输出
             print("\nAI: ", end="", flush=True)
@@ -623,14 +762,14 @@ async def chat_loop(provider: LLMProvider, session: Session) -> str:
 
         except KeyboardInterrupt:
             print("\n\n[中断] 再见！")
-            return ""
+            return ("quit", "")
         except Exception as e:
             print(f"\n[错误] {e}\n")
             if settings.debug:
                 import traceback
                 traceback.print_exc()
 
-    return ""
+    return ("quit", "")
 
 
 def check_first_run() -> bool:
@@ -668,10 +807,13 @@ async def main():
     # 创建新会话
     session = store.create()
 
-    # 当前 Provider ID（用于切换检测）
+    # 当前状态
     current_provider_id = None
+    current_role = ""  # 当前角色
+    knowledge_manager = None  # 角色知识库管理器
+    role_manager = RoleManager()
 
-    # 主循环：支持热切换 Provider
+    # 主循环：支持热切换 Provider 和角色
     while True:
         # 重新加载配置以获取最新的 Provider 设置
         reload_settings()
@@ -680,15 +822,41 @@ async def main():
         provider = create_provider()
         current_provider_id = settings.llm_provider.lower()
 
-        # 启动对话循环
-        result = await chat_loop(provider, session)
+        # 如果有角色且有知识库，创建/更新知识库管理器
+        if current_role:
+            info = role_manager.get_role_info(current_role)
+            if info.get("has_knowledge") and knowledge_manager is None:
+                print(f"正在初始化角色知识库...")
+                try:
+                    knowledge_manager = await role_manager.get_knowledge_manager(
+                        current_role,
+                        google_api_key=settings.google_api_key,
+                        openai_api_key=getattr(settings, 'openai_api_key', None),
+                    )
+                    if knowledge_manager:
+                        stats = knowledge_manager.get_stats()
+                        print(f"知识库已加载: {stats['file_count']} 个文件, {stats['chunk_count']} 个分块")
+                except Exception as e:
+                    print(f"知识库初始化失败: {e}")
+                    knowledge_manager = None
 
-        if not result:
-            # 用户退出
+        # 启动对话循环
+        action, value = await chat_loop(provider, session, current_role, knowledge_manager)
+
+        if action == "quit":
+            # 关闭知识库管理器
+            if knowledge_manager:
+                knowledge_manager.close()
             break
-        else:
-            # 用户切换了 Provider，重新加载
-            print(f"\n正在切换到 {result}...")
+        elif action == "switch_provider":
+            print(f"\n正在切换到 {value}...")
+            continue
+        elif action == "switch_role":
+            # 关闭旧的知识库管理器
+            if knowledge_manager:
+                knowledge_manager.close()
+                knowledge_manager = None
+            current_role = value
             continue
 
 
