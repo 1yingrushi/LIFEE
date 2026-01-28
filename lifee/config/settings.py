@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # LLM Provider 选择
     llm_provider: str = Field(
         default="claude",
-        description="LLM Provider: claude, qwen-portal, qwen, gemini, ollama, opencode",
+        description="LLM Provider: claude, synthetic, qwen-portal, qwen, gemini, ollama, opencode",
     )
 
     # Claude API
@@ -41,6 +41,13 @@ class Settings(BaseSettings):
 
         from lifee.providers.auth import get_api_key_from_credentials
         return get_api_key_from_credentials()
+
+    # Synthetic (免费大模型代理)
+    synthetic_model: str = Field(
+        default="deepseek-v3",
+        description="Synthetic 模型名称 (deepseek-v3, glm-4.7, qwen3-235b 等)",
+    )
+    synthetic_api_key: str = Field(default="", description="Synthetic API Key")
 
     # Qwen Portal (免费 OAuth，通过 clawdbot 登录)
     qwen_portal_model: str = Field(default="coder-model", description="Qwen Portal 模型名称")

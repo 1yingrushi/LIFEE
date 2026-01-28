@@ -247,6 +247,40 @@ def read_clawdbot_qwen_credentials() -> Optional[OAuthCredentials]:
         return None
 
 
+def read_clawdbot_synthetic_credentials() -> Optional[str]:
+    """
+    读取 clawdbot 的 Synthetic API Key
+
+    凭据文件位置: ~/.clawdbot/agents/main/agent/auth-profiles.json
+
+    Returns:
+        API Key 或 None
+    """
+    cred_path = get_clawdbot_credentials_path()
+
+    if not cred_path.exists():
+        return None
+
+    try:
+        with open(cred_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        profiles = data.get("profiles", {})
+
+        # 查找 synthetic 相关的凭据
+        for key, profile in profiles.items():
+            if "synthetic" in key.lower():
+                # Synthetic 可能使用 api_key 或 access 字段
+                api_key = profile.get("key") or profile.get("access")
+                if api_key:
+                    return api_key
+
+        return None
+
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
 def get_auth_info() -> dict:
     """
     获取认证信息摘要

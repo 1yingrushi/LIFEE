@@ -13,12 +13,14 @@ from lifee.providers import (
     Message,
     MessageRole,
     ClaudeProvider,
+    SyntheticProvider,
     QwenPortalProvider,
     QwenProvider,
     OllamaProvider,
     OpenCodeZenProvider,
     GeminiProvider,
     read_clawdbot_qwen_credentials,
+    read_clawdbot_synthetic_credentials,
 )
 from lifee.sessions import Session, SessionStore
 
@@ -36,6 +38,24 @@ def create_provider() -> LLMProvider:
             print("  2. 或设置环境变量 ANTHROPIC_API_KEY")
             sys.exit(1)
         return ClaudeProvider(api_key=api_key, model=settings.claude_model)
+
+    elif provider_name == "synthetic":
+        # 尝试从环境变量或 clawdbot 获取 API Key
+        api_key = settings.synthetic_api_key
+        if not api_key:
+            # 尝试从 clawdbot 获取
+            api_key = read_clawdbot_synthetic_credentials()
+        if not api_key:
+            print("\n错误: 未找到 Synthetic API Key")
+            print("解决方法:")
+            print("  1. 安装 clawdbot 并登录 Synthetic: npm install -g clawdbot")
+            print("  2. 或在 .env 中设置 SYNTHETIC_API_KEY")
+            print("  获取地址: https://synthetic.new/")
+            sys.exit(1)
+        return SyntheticProvider(
+            api_key=api_key,
+            model=settings.synthetic_model,
+        )
 
     elif provider_name == "qwen-portal":
         # 尝试从 clawdbot 读取 OAuth 凭据
@@ -89,7 +109,7 @@ def create_provider() -> LLMProvider:
 
     else:
         print(f"\n错误: 未知的 Provider: {provider_name}")
-        print("支持的 Provider: claude, qwen-portal, qwen, gemini, ollama, opencode")
+        print("支持的 Provider: claude, synthetic, qwen-portal, qwen, gemini, ollama, opencode")
         sys.exit(1)
 
 
