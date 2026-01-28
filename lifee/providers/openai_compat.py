@@ -8,9 +8,20 @@
 """
 from typing import AsyncIterator, List, Optional
 
-from openai import AsyncOpenAI
+import httpx
+from openai import AsyncOpenAI, APIConnectionError, NotFoundError
 
 from .base import ChatResponse, LLMProvider, Message, MessageRole
+
+
+class ProviderConnectionError(Exception):
+    """Provider 连接错误"""
+    pass
+
+
+class ModelNotFoundError(Exception):
+    """模型未找到"""
+    pass
 
 
 class OpenAICompatProvider(LLMProvider):
@@ -78,13 +89,30 @@ class OpenAICompatProvider(LLMProvider):
         """发送聊天请求"""
         msg_list = self._convert_messages(messages, system)
 
-        response = await self._client.chat.completions.create(
-            model=self._model,
-            messages=msg_list,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            **kwargs,
-        )
+        try:
+            response = await self._client.chat.completions.create(
+                model=self._model,
+                messages=msg_list,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **kwargs,
+            )
+        except (APIConnectionError, httpx.ConnectError) as e:
+            if self._provider_name == "ollama":
+                raise ProviderConnectionError(
+                    f"无法连接到 Ollama。\n"
+                    f"  如果未安装: https://ollama.ai/download\n"
+                    f"  如果已安装: 请运行 'ollama serve' 启动服务"
+                ) from e
+            raise ProviderConnectionError(
+                f"无法连接到 {self._provider_name}，请检查网络连接"
+            ) from e
+        except NotFoundError as e:
+            if self._provider_name == "ollama":
+                raise ModelNotFoundError(
+                    f"模型 '{self._model}' 未找到。请先运行: ollama pull {self._model}"
+                ) from e
+            raise ModelNotFoundError(f"模型 '{self._model}' 未找到") from e
 
         choice = response.choices[0]
         return ChatResponse(
@@ -108,14 +136,31 @@ class OpenAICompatProvider(LLMProvider):
         """流式聊天请求"""
         msg_list = self._convert_messages(messages, system)
 
-        stream = await self._client.chat.completions.create(
-            model=self._model,
-            messages=msg_list,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stream=True,
-            **kwargs,
-        )
+        try:
+            stream = await self._client.chat.completions.create(
+                model=self._model,
+                messages=msg_list,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=True,
+                **kwargs,
+            )
+        except (APIConnectionError, httpx.ConnectError) as e:
+            if self._provider_name == "ollama":
+                raise ProviderConnectionError(
+                    f"无法连接到 Ollama。\n"
+                    f"  如果未安装: https://ollama.ai/download\n"
+                    f"  如果已安装: 请运行 'ollama serve' 启动服务"
+                ) from e
+            raise ProviderConnectionError(
+                f"无法连接到 {self._provider_name}，请检查网络连接"
+            ) from e
+        except NotFoundError as e:
+            if self._provider_name == "ollama":
+                raise ModelNotFoundError(
+                    f"模型 '{self._model}' 未找到。请先运行: ollama pull {self._model}"
+                ) from e
+            raise ModelNotFoundError(f"模型 '{self._model}' 未找到") from e
 
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:

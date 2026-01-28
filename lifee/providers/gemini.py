@@ -112,10 +112,11 @@ class GeminiProvider(LLMProvider):
             temperature=temperature,
         )
 
-        async for chunk in self._client.aio.models.generate_content_stream(
+        stream = await self._client.aio.models.generate_content_stream(
             model=self._model_name,
             contents=contents,
             config=config,
-        ):
+        )
+        async for chunk in stream:
             if chunk.text:
                 yield chunk.text
