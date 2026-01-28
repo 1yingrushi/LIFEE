@@ -122,8 +122,39 @@ class OpenAICompatProvider(LLMProvider):
                 yield chunk.choices[0].delta.content
 
 
+class QwenPortalProvider(OpenAICompatProvider):
+    """Qwen Portal Provider (免费 OAuth)
+
+    完全免费，通过 OAuth 登录获取 access token
+    这是 clawdbot 使用的方式
+    """
+
+    QWEN_PORTAL_BASE_URL = "https://portal.qwen.ai/v1"
+
+    def __init__(
+        self,
+        access_token: str,
+        model: str = "coder-model",
+    ):
+        """
+        初始化 Qwen Portal Provider
+
+        Args:
+            access_token: Qwen Portal OAuth access token
+            model: 模型名称，可选：
+                - coder-model (代码模型)
+                - vision-model (视觉模型)
+        """
+        super().__init__(
+            api_key=access_token,
+            base_url=self.QWEN_PORTAL_BASE_URL,
+            model=model,
+            provider_name="qwen-portal",
+        )
+
+
 class QwenProvider(OpenAICompatProvider):
-    """Qwen (阿里通义千问) Provider
+    """Qwen DashScope Provider (需要 API Key)
 
     免费额度：2000 请求/天
     API 文档：https://help.aliyun.com/zh/model-studio/
@@ -190,10 +221,11 @@ class OllamaProvider(OpenAICompatProvider):
 class OpenCodeZenProvider(OpenAICompatProvider):
     """OpenCode Zen Provider
 
-    多模型代理服务
+    多模型代理服务，支持多种模型
+    API 端点与 clawdbot 一致
     """
 
-    OPENCODE_BASE_URL = "https://api.opencode.dev/v1"
+    OPENCODE_BASE_URL = "https://opencode.ai/zen/v1"
 
     def __init__(
         self,

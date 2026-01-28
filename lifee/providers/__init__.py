@@ -1,11 +1,12 @@
 """LLM Providers"""
 from .base import ChatResponse, LLMProvider, Message, MessageRole
 from .claude import ClaudeProvider
-from .openai_compat import QwenProvider, OllamaProvider, OpenCodeZenProvider
+from .openai_compat import QwenPortalProvider, QwenProvider, OllamaProvider, OpenCodeZenProvider
 from .gemini import GeminiProvider
 from .auth import (
     OAuthCredentials,
     read_claude_code_credentials,
+    read_clawdbot_qwen_credentials,
     get_api_key_from_credentials,
     get_auth_info,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "ChatResponse",
     # Providers
     "ClaudeProvider",
+    "QwenPortalProvider",
     "QwenProvider",
     "OllamaProvider",
     "OpenCodeZenProvider",
@@ -25,6 +27,7 @@ __all__ = [
     # 认证
     "OAuthCredentials",
     "read_claude_code_credentials",
+    "read_clawdbot_qwen_credentials",
     "get_api_key_from_credentials",
     "get_auth_info",
 ]

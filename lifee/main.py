@@ -13,10 +13,12 @@ from lifee.providers import (
     Message,
     MessageRole,
     ClaudeProvider,
+    QwenPortalProvider,
     QwenProvider,
     OllamaProvider,
     OpenCodeZenProvider,
     GeminiProvider,
+    read_clawdbot_qwen_credentials,
 )
 from lifee.sessions import Session, SessionStore
 
@@ -34,6 +36,21 @@ def create_provider() -> LLMProvider:
             print("  2. 或设置环境变量 ANTHROPIC_API_KEY")
             sys.exit(1)
         return ClaudeProvider(api_key=api_key, model=settings.claude_model)
+
+    elif provider_name == "qwen-portal":
+        # 尝试从 clawdbot 读取 OAuth 凭据
+        qwen_creds = read_clawdbot_qwen_credentials()
+        if qwen_creds and qwen_creds.access_token:
+            return QwenPortalProvider(
+                access_token=qwen_creds.access_token,
+                model=settings.qwen_portal_model,
+            )
+        print("\n错误: 未找到 Qwen Portal OAuth 凭据")
+        print("解决方法:")
+        print("  1. 安装 clawdbot: npm install -g clawdbot")
+        print("  2. 运行 clawdbot 并登录 Qwen Portal")
+        print("  或者使用 LLM_PROVIDER=qwen (需要 DashScope API Key)")
+        sys.exit(1)
 
     elif provider_name == "qwen":
         if not settings.qwen_api_key:
@@ -72,7 +89,7 @@ def create_provider() -> LLMProvider:
 
     else:
         print(f"\n错误: 未知的 Provider: {provider_name}")
-        print("支持的 Provider: claude, qwen, gemini, ollama, opencode")
+        print("支持的 Provider: claude, qwen-portal, qwen, gemini, ollama, opencode")
         sys.exit(1)
 
 

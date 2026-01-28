@@ -201,6 +201,52 @@ def get_api_key_from_credentials() -> Optional[str]:
     return creds.access_token
 
 
+def get_clawdbot_credentials_path() -> Path:
+    """获取 clawdbot 凭据文件路径"""
+    return Path.home() / ".clawdbot" / "agents" / "main" / "agent" / "auth-profiles.json"
+
+
+def read_clawdbot_qwen_credentials() -> Optional[OAuthCredentials]:
+    """
+    读取 clawdbot 的 Qwen Portal OAuth 凭据
+
+    凭据文件位置: ~/.clawdbot/agents/main/agent/auth-profiles.json
+
+    Returns:
+        OAuthCredentials 或 None（如果不存在或无效）
+    """
+    cred_path = get_clawdbot_credentials_path()
+
+    if not cred_path.exists():
+        return None
+
+    try:
+        with open(cred_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        profiles = data.get("profiles", {})
+
+        # 查找 qwen-portal 相关的凭据
+        for key, profile in profiles.items():
+            if "qwen" in key.lower():
+                access_token = profile.get("access")
+                refresh_token = profile.get("refresh")
+                expires_at = profile.get("expires")
+
+                if access_token:
+                    return OAuthCredentials(
+                        access_token=access_token,
+                        refresh_token=refresh_token,
+                        expires_at=int(expires_at) if expires_at else 0,
+                        provider="qwen-portal",
+                    )
+
+        return None
+
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
 def get_auth_info() -> dict:
     """
     获取认证信息摘要

@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # LLM Provider 选择
     llm_provider: str = Field(
         default="claude",
-        description="LLM Provider: claude, qwen, gemini, ollama, opencode",
+        description="LLM Provider: claude, qwen-portal, qwen, gemini, ollama, opencode",
     )
 
     # Claude API
@@ -42,7 +42,10 @@ class Settings(BaseSettings):
         from lifee.providers.auth import get_api_key_from_credentials
         return get_api_key_from_credentials()
 
-    # Qwen API (阿里通义千问，免费 2000/天)
+    # Qwen Portal (免费 OAuth，通过 clawdbot 登录)
+    qwen_portal_model: str = Field(default="coder-model", description="Qwen Portal 模型名称")
+
+    # Qwen API (阿里通义千问 DashScope，免费 2000/天)
     qwen_api_key: str = Field(default="", description="Qwen/DashScope API Key")
     qwen_model: str = Field(default="qwen-plus", description="Qwen 模型名称")
 
