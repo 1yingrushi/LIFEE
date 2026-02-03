@@ -1,0 +1,244 @@
+"""
+角色系统 - 基于 Markdown 文件定义角色
+
+目录结构:
+    roles/
+    ├── __init__.py      # 角色加载器
+    ├── default/         # 默认角色（可选）
+    │   └── SOUL.md
+    └── <role_name>/     # 自定义角色
+        ├── SOUL.md      # 核心人格、价值观、行为边界
+        ├── IDENTITY.md  # 名字、风格、emoji（可选）
+        ├── knowledge/   # 角色专属知识库（可选）
+        │   └── *.md
+        └── knowledge.db # 知识库索引（自动生成）
+
+使用方式:
+    from lifee.roles import RoleManager
+
+    rm = RoleManager()
+    roles = rm.list_roles()           # 列出所有角色
+    prompt = rm.load_role("critic")   # 加载角色的 system prompt
+
+    # 知识库支持
+    manager = await rm.get_knowledge_manager("critic", google_api_key="...")
+    results = await manager.search("查询")
+"""
+
+from pathlib import Path
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from backend.memory import MemoryManager
+
+
+class RoleManager:
+    """角色管理器"""
+
+    def __init__(self, roles_dir: Optional[Path] = None):
+        if roles_dir is None:
+            roles_dir = Path(__file__).parent
+        self.roles_dir = Path(roles_dir)
+
+    def list_roles(self) -> list[str]:
+        """列出所有可用角色"""
+        roles = []
+        for item in self.roles_dir.iterdir():
+            if item.is_dir() and not item.name.startswith("_"):
+                soul_file = item / "SOUL.md"
+                if soul_file.exists():
+                    roles.append(item.name)
+        return sorted(roles)
+
+    def load_role(self, role_name: str) -> Optional[str]:
+        """
+        加载角色配置，返回组合后的 system prompt
+
+        加载顺序:
+        1. SOUL.md (必须) - 核心人格
+        2. IDENTITY.md (可选) - 身份信息
+        """
+        role_dir = self.roles_dir / role_name
+
+        if not role_dir.exists():
+            return None
+
+        soul_file = role_dir / "SOUL.md"
+        if not soul_file.exists():
+            return None
+
+        parts = []
+
+        # 加载 SOUL.md
+        soul_content = soul_file.read_text(encoding="utf-8").strip()
+        if soul_content:
+            parts.append(soul_content)
+
+        # 加载 IDENTITY.md (可选)
+        identity_file = role_dir / "IDENTITY.md"
+        if identity_file.exists():
+            identity_content = identity_file.read_text(encoding="utf-8").strip()
+            if identity_content:
+                parts.append(identity_content)
+
+        if not parts:
+            return None
+
+        return "\n\n---\n\n".join(parts)
+
+    def get_role_info(self, role_name: str) -> dict:
+        """获取角色的基本信息（包含 display_name 和 emoji）"""
+        role_dir = self.roles_dir / role_name
+
+        info = {
+            "name": role_name,
+            "exists": role_dir.exists(),
+            "has_soul": (role_dir / "SOUL.md").exists() if role_dir.exists() else False,
+            "has_identity": (role_dir / "IDENTITY.md").exists() if role_dir.exists() else False,
+            "has_knowledge": (role_dir / "knowledge").is_dir() if role_dir.exists() else False,
+        }
+
+        # 尝试从 IDENTITY.md 提取显示名称和 emoji（与 lifee.roles 保持一致）
+        if info["has_identity"]:
+            identity_file = role_dir / "IDENTITY.md"
+            content = identity_file.read_text(encoding="utf-8")
+            for line in content.split("\n"):
+                line = line.strip()
+                if line.startswith("- **Name:**") or line.startswith("- **名字:**"):
+                    # 形如: - **Name:** 某某
+                    try:
+                        info["display_name"] = line.split(":**", 1)[1].strip()
+                    except Exception:
+                        pass
+                elif "**Emoji:**" in line:
+                    # 形如: - **Emoji:** 🤖
+                    try:
+                        info["emoji"] = line.split(":**", 1)[1].strip()
+                    except Exception:
+                        pass
+
+        return info
+
+    def get_role_emoji(self, role_name: str) -> str:
+        """获取角色的 emoji 标识（无配置时默认 🤖）"""
+        info = self.get_role_info(role_name)
+        return info.get("emoji", "🤖")
+
+    def get_knowledge_dir(self, role_name: str) -> Optional[Path]:
+        """获取角色的知识库目录"""
+        role_dir = self.roles_dir / role_name
+        knowledge_dir = role_dir / "knowledge"
+        if knowledge_dir.is_dir():
+            return knowledge_dir
+        return None
+
+    def get_knowledge_db_path(self, role_name: str) -> Path:
+        """获取角色的知识库数据库路径"""
+        role_dir = self.roles_dir / role_name
+        return role_dir / "knowledge.db"
+
+    async def get_knowledge_manager(
+        self,
+        role_name: str,
+        google_api_key: Optional[str] = None,
+        openai_api_key: Optional[str] = None,
+        siliconflow_api_key: Optional[str] = None,
+        siliconflow_base_url: Optional[str] = None,
+        siliconflow_embedding_model: Optional[str] = None,
+        auto_index: bool = True,
+    ) -> Optional["MemoryManager"]:
+        """
+        获取角色的知识库管理器
+
+        Args:
+            role_name: 角色名称
+            google_api_key: Google API Key（用于 Gemini 嵌入）
+            openai_api_key: OpenAI API Key
+            auto_index: 是否自动索引知识库目录
+
+        Returns:
+            MemoryManager 实例，如果角色没有知识库则返回 None
+        """
+        knowledge_dir = self.get_knowledge_dir(role_name)
+        if knowledge_dir is None:
+            return None
+
+        # 延迟导入避免循环依赖
+        from backend.memory import MemoryManager, create_embedding_provider
+
+        # 创建嵌入提供者
+        try:
+            embedding = create_embedding_provider(
+                google_api_key=google_api_key,
+                openai_api_key=openai_api_key,
+                siliconflow_api_key=siliconflow_api_key,
+                siliconflow_base_url=siliconflow_base_url,
+                siliconflow_embedding_model=siliconflow_embedding_model,
+            )
+        except ValueError:
+            # 没有可用的 API Key
+            return None
+
+        # 创建管理器
+        db_path = self.get_knowledge_db_path(role_name)
+        manager = MemoryManager(db_path, embedding)
+
+        # 自动索引（支持 .md 和 .txt 文件）
+        if auto_index:
+            # 收集所有待索引文件
+            files = list(knowledge_dir.rglob("*.md")) + list(knowledge_dir.rglob("*.txt"))
+            files = [f for f in files if f.is_file()]
+
+            if files:
+                # 检查数据库状态
+                stats = manager.get_stats()
+                
+                # 只索引需要索引的文件（避免重复索引）
+                files_to_index = []
+                for f in files:
+                    if manager._needs_reindex(f):
+                        files_to_index.append(f)
+
+                if files_to_index:
+                    total = len(files_to_index)
+                    # 只在有大量文件需要索引时显示进度（避免日志噪音）
+                    show_progress = total > 3
+                    if show_progress:
+                        print(f"  索引知识库: 0/{total}", end="", flush=True)
+                    indexed = 0
+                    for f in files_to_index:
+                        try:
+                            await manager.index_file(f)
+                            indexed += 1
+                            if show_progress:
+                                print(f"\r  索引知识库: {indexed}/{total}", end="", flush=True)
+                        except Exception as e:
+                            # 索引失败时继续处理其他文件，不中断
+                            print(f"\n[警告] 索引文件失败 {f.name}: {e}")
+                            indexed += 1  # 即使失败也计入进度
+                    if show_progress:
+                        print()  # 换行
+
+        return manager
+
+
+# 便捷函数
+_manager: Optional[RoleManager] = None
+
+
+def get_manager() -> RoleManager:
+    """获取全局角色管理器"""
+    global _manager
+    if _manager is None:
+        _manager = RoleManager()
+    return _manager
+
+
+def list_roles() -> list[str]:
+    """列出所有可用角色"""
+    return get_manager().list_roles()
+
+
+def load_role(role_name: str) -> Optional[str]:
+    """加载角色的 system prompt"""
+    return get_manager().load_role(role_name)

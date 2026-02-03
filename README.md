@@ -1,213 +1,306 @@
-# LIFEE - 辩论式 AI 决策助手
+# LIFEE - Let Them Argue
 
-Google Hackathon 2025 项目
+**Multi-perspective life decision assistant.**
 
-## 快速开始
+LIFEE 是一个基于 FastAPI + Vue.js 的辩论式 AI 决策助手，支持多智能体辩论、角色系统、知识库 RAG 等功能。
 
-### 1. 安装依赖
+## 🏗️ 项目架构
+
+```
+LIFEE/
+├── backend/          # FastAPI 后端服务
+│   ├── app.py       # FastAPI 应用入口
+│   ├── config/      # 配置管理
+│   ├── providers/   # LLM 提供商 (Claude, Gemini, Qwen, Ollama, SiliconFlow...)
+│   ├── sessions/     # 会话管理
+│   ├── roles/       # 角色系统
+│   ├── memory/      # 知识库/RAG
+│   └── debate/      # 多智能体辩论
+├── frontend/         # Vue.js + Vite 前端
+│   └── src/
+│       └── App.vue  # 主应用组件
+└── test/            # 测试工具
+    └── backend_chat_cli.py  # CLI 测试客户端
+```
+
+## 🚀 快速开始
+
+### 1. 后端设置
+
+#### 安装依赖
 
 ```bash
+cd backend
 pip install -r requirements.txt
 ```
 
-### 2. 选择 LLM Provider
+#### 配置环境变量
 
-支持多种 LLM 提供商，编辑 `.env` 文件选择：
-
-| Provider | 免费额度 | 说明 |
-|----------|---------|------|
-| **Gemini** | 免费 | Google AI，推荐使用 |
-| **Qwen** | 2000次/天 | 阿里通义千问 DashScope API |
-| **Qwen Portal** | 2000次/天 | 通过 clawdbot OAuth 登录 |
-| **Ollama** | 完全免费 | 本地运行，需安装 Ollama |
-| **OpenCode** | $20 起 | 需绑定支付方式 |
-| **Claude** | 需付费 | Anthropic Claude API |
-
-### 3. 配置
-
-复制配置文件：
+在 `backend/` 目录下创建 `.env` 文件：
 
 ```bash
-cp .env.example .env
-```
+# 选择 LLM Provider
+LLM_PROVIDER=siliconflow  # 或 claude, synthetic, qwen, gemini, ollama, opencode
 
-编辑 `.env`，设置 Provider 和对应的 API Key：
+# SiliconFlow (推荐，OpenAI 兼容)
+SILICONFLOW_API_KEY=your-api-key
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+SILICONFLOW_MODEL=Qwen/Qwen2.5-7B-Instruct
+SILICONFLOW_EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5
 
-```bash
-# 选择 Provider
-LLM_PROVIDER=gemini
+# 备用 Provider (可选，逗号分隔)
+LLM_FALLBACK=qwen,ollama
 
-# Gemini (推荐)
+# Gemini (用于向量嵌入，如果使用 Gemini Embedding)
 GOOGLE_API_KEY=your-api-key
 
-# 或者 Qwen
-# LLM_PROVIDER=qwen
-# QWEN_API_KEY=your-api-key
-
-# 或者 Ollama (本地)
-# LLM_PROVIDER=ollama
-# ollama pull qwen2.5
+# 其他 Provider 配置...
+# ANTHROPIC_API_KEY=...
+# QWEN_API_KEY=...
+# OPENAI_API_KEY=...
 ```
 
-### 4. 运行对话
+#### 启动后端服务
 
 ```bash
-python -m lifee.main
+# 从项目根目录运行
+uvicorn backend.app:app --reload
+
+# 或从 backend 目录运行
+cd backend
+uvicorn app:app --reload
 ```
 
-首次运行会让你选择具体模型。
+后端将在 `http://127.0.0.1:8000` 启动。
 
-### 5. 使用命令
+### 2. 前端设置
 
-```
-/help    - 显示帮助
-/history - 显示对话历史
-/clear   - 清空对话历史
-/role    - 切换角色
-/model   - 切换模型
-/memory  - 查看知识库状态
-/quit    - 退出程序
+#### 安装依赖
+
+```bash
+cd frontend
+npm install
 ```
 
-## 角色系统
+#### 启动开发服务器
 
-LIFEE 支持自定义 AI 角色，每个角色可以有独特的人格和专属知识库。
-
-### 目录结构
-
-```
-lifee/roles/
-└── <role_name>/
-    ├── SOUL.md           # 核心人格（必需）
-    ├── IDENTITY.md       # 身份信息（可选）
-    └── knowledge/        # 专属知识库（可选）
-        └── *.md
+```bash
+npm run dev
 ```
 
-### 文件说明
+前端将在 `http://localhost:5173` 启动。
 
-| 文件 | 作用 |
-|------|------|
-| `SOUL.md` | 定义角色的核心人格、价值观、说话风格、行为边界 |
-| `IDENTITY.md` | 名字、emoji 等元信息，用于显示 |
-| `knowledge/` | Markdown 文件，会被自动索引，对话时通过语义搜索注入相关内容 |
+### 3. 访问应用
+
+打开浏览器访问 `http://localhost:5173`，即可使用 LIFEE 应用。
+
+## 📖 使用指南
+
+### 基本流程
+
+1. **输入情境**：在首页输入你的问题或情境描述
+2. **选择角色**：从后端加载的角色中选择至少 2 个角色参与辩论
+3. **开始辩论**：点击 "Commence Dialogue" 开始多智能体辩论
+4. **交互**：查看各角色的观点，选择建议选项或输入新内容继续讨论
+
+### 角色系统
+
+角色定义在 `backend/roles/` 目录下，每个角色包含：
+
+```
+backend/roles/<role_name>/
+├── SOUL.md           # 核心人格（必需）
+├── IDENTITY.md       # 身份信息（可选，包含 Name、Emoji 等）
+└── knowledge/        # 专属知识库（可选）
+    └── *.md          # Markdown 文档
+```
+
+**SOUL.md**：定义角色的核心人格、价值观、说话风格、行为边界
+
+**IDENTITY.md**：角色的元信息，例如：
+```markdown
+- **Name:** 角色显示名称
+- **Emoji:** 🤖
+```
+
+**knowledge/**：角色的专属知识库，Markdown 文件会被自动索引，对话时通过语义搜索注入相关内容
 
 ### 知识库工作原理
 
-知识库让 AI 能够基于角色专属的文档（书籍、文章等）回答问题，而不是泛泛而谈。
+1. **索引阶段**（首次运行或文件更新时）
+   - 文档 → 分块（~400 token/块）→ 嵌入向量 → 存入 `knowledge.db`
 
-**工作流程：**
+2. **对话阶段**
+   - 用户输入 → 生成查询向量 → 搜索最相似的分块 → 注入到 system prompt → AI 回答
 
-```
-1. 索引阶段（首次运行）
-   文档 → 分块（~400 token/块）→ 嵌入向量（Gemini API）→ 存入 knowledge.db
+3. **搜索算法**：混合搜索 = 70% 向量相似度 + 30% 关键词匹配
 
-2. 对话阶段
-   用户输入 → 生成查询向量 → 搜索最相似的分块 → 注入到 system prompt → AI 回答
-```
+### API 端点
 
-**knowledge.db 结构（SQLite）：**
+#### 角色相关
 
-| 表 | 内容 |
-|---|---|
-| `files` | 已索引文件列表（路径、hash、修改时间） |
-| `chunks` | 文本分块 + 嵌入向量（3072 维） |
-| `chunks_fts` | 全文搜索索引（FTS5，用于关键词搜索） |
+- `GET /roles/info` - 获取所有角色信息
+- `GET /roles/info/{role_name}` - 获取特定角色信息
 
-**搜索算法：** 混合搜索 = 70% 向量相似度 + 30% 关键词匹配
+#### 对话相关
 
-### 为你的角色构建知识库
+- `POST /chat` - 单智能体对话
+  ```json
+  {
+    "message": "用户消息",
+    "role": "角色名称（可选）"
+  }
+  ```
 
-**步骤 1：准备文档**
+#### 辩论相关
 
-在角色目录下创建 `knowledge/` 文件夹，放入 `.md` 或 `.txt` 文件：
+- `POST /debate/round` - 多智能体辩论一轮
+  ```json
+  {
+    "user_input": "用户输入（可为空）",
+    "role_names": ["role1", "role2"],
+    "situation": "情境描述（可选）"
+  }
+  ```
 
-```
-lifee/roles/your_role/
-├── SOUL.md
-├── IDENTITY.md
-└── knowledge/
-    ├── book1.txt      # 书籍文本
-    ├── book2.txt
-    └── notes.md       # 手写笔记
-```
+## 🔧 支持的 LLM Provider
 
-**步骤 2：运行程序**
+| Provider | 说明 | 配置项 |
+|----------|------|--------|
+| **SiliconFlow** | 硅基流动（OpenAI 兼容） | `SILICONFLOW_API_KEY`, `SILICONFLOW_BASE_URL`, `SILICONFLOW_MODEL` |
+| **Claude** | Anthropic Claude | `ANTHROPIC_API_KEY` |
+| **Gemini** | Google Gemini | `GOOGLE_API_KEY` |
+| **Qwen** | 阿里通义千问 | `QWEN_API_KEY` |
+| **Ollama** | 本地运行 | `OLLAMA_BASE_URL` (默认 http://localhost:11434) |
+| **OpenCode Zen** | OpenCode 平台 | `OPENCODE_API_KEY` |
+| **Synthetic** | Synthetic 平台 | `SYNTHETIC_API_KEY` |
+
+### 备用 Provider
+
+支持配置备用 Provider，当主 Provider 失败时自动切换：
 
 ```bash
-python -m lifee.main
-# 选择你的角色，会自动索引
-# 显示进度: 索引知识库: 1/5 ... 5/5
+LLM_PROVIDER=siliconflow
+LLM_FALLBACK=qwen,ollama  # 逗号分隔，按优先级排序
 ```
 
-首次索引需要调用 Gemini Embedding API，每个文件约 5-10 秒。
+## 🧪 测试
 
-**步骤 3：测试搜索**
+### CLI 测试客户端
+
+使用 `test/backend_chat_cli.py` 测试后端 API：
+
+```bash
+python -m test.backend_chat_cli
+```
+
+支持单智能体对话和多智能体辩论模式。
+
+## 📁 项目结构
 
 ```
-/memory            # 查看知识库状态
-/memory search 关键词  # 测试搜索效果
-```
-
-### 知识库最佳实践
-
-1. **文本格式**：纯文本最佳，PDF/EPUB 需先提取文本（见 `tools/extract_books.py`）
-2. **分块大小**：默认 400 token，适合大多数场景
-3. **文件命名**：使用有意义的文件名，搜索结果会显示来源
-4. **预构建数据库**：仓库已包含预构建的 `knowledge.db`，队友克隆后可直接使用
-5. **重建索引**：添加新文档后，删除 `knowledge.db`，重新运行程序即可
-
-### 创建新角色
-
-1. 在 `lifee/roles/` 下创建目录，如 `lifee/roles/stoic/`
-2. 编写 `SOUL.md` 描述人格
-3. （可选）添加 `IDENTITY.md`
-4. （可选）在 `knowledge/` 下添加知识文档
-5. 运行程序，用 `/role` 切换
-
-## 支持的模型
-
-### Gemini
-- `gemini-3-flash-preview` - Gemini 3 快速
-- `gemini-3-pro-preview` - Gemini 3 最强
-- `gemini-2.5-pro` - 2.5 最强
-- `gemini-2.5-flash` - 2.5 快速
-- `gemini-2.0-flash` - 2.0 推荐
-
-### Qwen
-- `qwen-plus` - 通用增强
-- `qwen-turbo` - 快速
-- `qwen-max` - 最强
-
-### Ollama
-- `qwen2.5:latest` - 推荐
-- `llama3.3:latest`
-- `deepseek-r1:latest`
-
-## 项目结构
-
-```
-lifee/
-├── config/         # 配置管理
-├── providers/      # LLM 提供商 (Claude, Gemini, Qwen, Ollama...)
-├── sessions/       # 会话管理
-├── roles/          # 角色系统
-│   └── <role>/
+backend/
+├── app.py              # FastAPI 应用入口
+├── config/
+│   └── settings.py     # 配置管理（从 backend/.env 读取）
+├── providers/          # LLM 提供商
+│   ├── base.py         # 基础接口
+│   ├── claude.py       # Claude Provider
+│   ├── gemini.py       # Gemini Provider
+│   ├── qwen.py         # Qwen Provider
+│   ├── ollama.py       # Ollama Provider
+│   ├── siliconflow.py # SiliconFlow Provider
+│   ├── fallback.py     # 备用 Provider
+│   └── ...
+├── sessions/           # 会话管理
+├── roles/              # 角色系统
+│   └── <role_name>/
 │       ├── SOUL.md
 │       ├── IDENTITY.md
 │       └── knowledge/
-├── memory/         # 知识库/RAG
+├── memory/             # 知识库/RAG
 │   ├── manager.py      # 索引管理
-│   ├── embeddings.py   # 嵌入提供者 (Gemini/OpenAI)
-│   ├── search.py       # 混合搜索 (向量+关键词)
+│   ├── embeddings.py   # 嵌入提供者
+│   ├── search.py       # 混合搜索
 │   └── chunker.py      # 文档分块
-└── main.py         # CLI 入口
+└── debate/              # 多智能体辩论
+    ├── moderator.py     # 主持者
+    ├── participant.py   # 参与者
+    └── context.py       # 辩论上下文
+
+frontend/
+├── src/
+│   ├── App.vue         # 主应用组件
+│   └── style.css       # 全局样式
+├── package.json
+└── vite.config.js
+
+test/
+└── backend_chat_cli.py # CLI 测试客户端
 ```
 
-## 开发进度
+## 🔒 环境变量说明
 
-- [x] Phase 1: 基础对话
-- [x] 多 LLM Provider 支持
-- [x] Phase 2: 角色系统
-- [x] Phase 3: 知识库/RAG
-- [ ] Phase 4: 多智能体辩论
+所有环境变量配置在 `backend/.env` 文件中。主要配置项：
+
+- `LLM_PROVIDER`: 主 LLM Provider
+- `LLM_FALLBACK`: 备用 Provider 列表（逗号分隔）
+- `SILICONFLOW_API_KEY`: SiliconFlow API Key
+- `GOOGLE_API_KEY`: Google API Key（用于 Gemini Embedding）
+- `OPENAI_API_KEY`: OpenAI API Key（用于 OpenAI Embedding）
+- 其他 Provider 的 API Key...
+
+## 📝 开发说明
+
+### 添加新角色
+
+1. 在 `backend/roles/` 下创建目录，如 `backend/roles/my_role/`
+2. 编写 `SOUL.md` 描述人格
+3. （可选）添加 `IDENTITY.md` 设置显示名称和 emoji
+4. （可选）在 `knowledge/` 下添加知识文档
+5. 重启后端服务，角色会自动加载
+
+### 添加新 LLM Provider
+
+1. 在 `backend/providers/` 下创建新的 Provider 类，继承 `LLMProvider`
+2. 实现 `chat()` 和 `stream()` 方法
+3. 在 `backend/providers/__init__.py` 中导出
+4. 在 `backend/config/settings.py` 中添加配置项
+5. 在 `backend/app.py` 的 `create_provider_for_api()` 中添加创建逻辑
+
+## 🐛 故障排除
+
+### 后端无法启动
+
+- 检查 `backend/.env` 文件是否存在
+- 检查 Python 依赖是否安装完整：`pip install -r backend/requirements.txt`
+- 检查端口 8000 是否被占用
+
+### 前端无法连接后端
+
+- 检查后端是否运行在 `http://127.0.0.1:8000`
+- 检查 CORS 配置（后端已配置允许 `localhost:5173`）
+- 检查浏览器控制台的错误信息
+
+### 角色未显示
+
+- 检查 `backend/roles/` 目录下是否有角色的 `SOUL.md` 文件
+- 检查后端日志是否有错误信息
+- 使用 `GET /roles/info` API 测试
+
+### 知识库索引失败
+
+- 检查 Embedding Provider 的 API Key 是否正确配置
+- 检查知识库文件格式（支持 `.md` 和 `.txt`）
+- 查看后端启动日志中的错误信息
+
+## 📄 许可证
+
+MIT License
+
+## 🙏 致谢
+
+- FastAPI - 现代、快速的 Web 框架
+- Vue.js - 渐进式 JavaScript 框架
+- SiliconFlow - 提供 OpenAI 兼容的 LLM API
+- 所有贡献者

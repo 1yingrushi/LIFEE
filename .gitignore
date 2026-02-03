@@ -31,17 +31,73 @@ env/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
-# Environment
+# Environment Variables
 .env
 .env.local
+.env.*.local
+backend/.env
+backend/.env.local
 
-# Data
+# Data & Databases
 data/
-
-# 忽略数据库（知识库会自动构建）
 *.db
+*.sqlite
+*.sqlite3
+backend/roles/*/knowledge.db
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Node.js / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.vitest/
+frontend/coverage/
+frontend/.pnpm-debug.log*
+frontend/.yarn/
+frontend/.yarn/cache
+frontend/.yarn/unplugged
+frontend/.yarn/build-state.yml
+frontend/.yarn/install-state.gz
+frontend/.pnp.*
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Test coverage
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.tox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json

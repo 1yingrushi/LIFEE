@@ -1,0 +1,29 @@
+# LIFEE Backend Dependencies
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# CORS Support
+# (included in fastapi.middleware.cors)
+
+# Data Validation & Settings
+pydantic>=2.0
+pydantic-settings>=2.0
+
+# LLM Providers
+anthropic>=0.40.0          # Claude API
+openai>=1.0.0              # OpenAI 兼容 API (Qwen, Ollama, OpenCode Zen, SiliconFlow)
+google-genai>=1.0.0        # Google Gemini API
+
+# HTTP Client
+httpx>=0.25.0
+
+# Vector/Embedding Support
+numpy>=1.24.0              # 向量计算（余弦相似度）
+
+# Environment Variables (optional, pydantic-settings can read .env directly)
+python-dotenv>=1.0.0
+
+# Server-Sent Events (for streaming responses)
+sse-starlette>=1.6.5
