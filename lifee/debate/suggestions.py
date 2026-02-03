@@ -17,8 +17,11 @@ SUGGESTION_SYSTEM_PROMPT = """你是一个对话建议生成器。根据当前�
    - 一个转向新话题或新角度的建议
 2. 每个建议简短（10-30 字）
 3. 语气自然，像真人说话，用第一人称
-4. 用 JSON 数组格式返回：["建议1", "建议2", "建议3"]
-5. 只返回 JSON 数组，不要有其他内容"""
+
+输出格式（严格遵守）：
+- 只输出一个 JSON 数组，格式：["建议1", "建议2", "建议3"]
+- 不要输出任何其他文字、解释或前缀
+- 直接以 [ 开头，以 ] 结尾"""
 
 
 class SuggestionGenerator:
@@ -60,7 +63,6 @@ class SuggestionGenerator:
             response = await self.provider.chat(
                 messages=request_messages,
                 system=SUGGESTION_SYSTEM_PROMPT,
-                max_tokens=200,
                 temperature=0.8,
             )
 
@@ -68,10 +70,40 @@ class SuggestionGenerator:
             suggestions = self._parse_suggestions(response.content)
             return suggestions[:num_suggestions]
 
-        except Exception as e:
+        except Exception:
             # 任何错误都降级到空列表
-            print(f"\n[建议生成失败: {e}]")
             return []
+
+    def _find_json_array(self, content: str) -> str | None:
+        """找到第一个完整的 JSON 数组（正确处理字符串内的括号）"""
+        start = content.find('[')
+        if start == -1:
+            return None
+
+        depth = 0
+        in_string = False
+        escape = False
+
+        for i, c in enumerate(content[start:], start):
+            if escape:
+                escape = False
+                continue
+            if c == '\\':
+                escape = True
+                continue
+            if c == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if c == '[':
+                depth += 1
+            elif c == ']':
+                depth -= 1
+                if depth == 0:
+                    return content[start:i+1]
+
+        return None
 
     def _format_context(self, messages: List[Message], max_messages: int = 6) -> str:
         """将消息列表格式化为上下文文本"""
@@ -92,22 +124,50 @@ class SuggestionGenerator:
 
     def _parse_suggestions(self, content: str) -> List[str]:
         """解析 LLM 返回的建议"""
+        if not content:
+            return []
+
+        content = content.strip()
+
         # 尝试直接解析 JSON
         try:
-            suggestions = json.loads(content.strip())
+            suggestions = json.loads(content)
             if isinstance(suggestions, list):
-                return [str(s) for s in suggestions if s]
+                return [str(s).strip() for s in suggestions if s]
         except json.JSONDecodeError:
             pass
 
-        # 尝试提取 JSON 数组部分
-        match = re.search(r'\[.*?\]', content, re.DOTALL)
-        if match:
+        # 尝试提取 JSON 数组部分 - 使用括号匹配而非正则
+        json_str = self._find_json_array(content)
+        if json_str:
             try:
-                suggestions = json.loads(match.group())
+                suggestions = json.loads(json_str)
                 if isinstance(suggestions, list):
-                    return [str(s) for s in suggestions if s]
+                    return [str(s).strip() for s in suggestions if s]
             except json.JSONDecodeError:
                 pass
+
+        # 尝试从 markdown 代码块中提取
+        code_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', content)
+        if code_match:
+            try:
+                suggestions = json.loads(code_match.group(1).strip())
+                if isinstance(suggestions, list):
+                    return [str(s).strip() for s in suggestions if s]
+            except json.JSONDecodeError:
+                pass
+
+        # 最后尝试：按行分割，提取看起来像建议的内容
+        lines = content.split('\n')
+        suggestions = []
+        for line in lines:
+            line = line.strip()
+            # 去掉常见的列表前缀
+            line = re.sub(r'^[\d\.\-\*\•]+\s*', '', line)
+            line = re.sub(r'^["「『]|["」』]$', '', line)  # 去掉引号
+            if line and len(line) > 5 and len(line) < 100:
+                suggestions.append(line)
+        if suggestions:
+            return suggestions[:3]
 
         return []

@@ -5,6 +5,40 @@ from enum import Enum
 from typing import AsyncIterator, List, Optional
 
 
+# =============================================================================
+# 可重试的错误类型（用于 Provider Fallback）
+# =============================================================================
+
+
+class RetryableError(Exception):
+    """可重试的错误（应触发 fallback）"""
+
+    pass
+
+
+class ServiceUnavailableError(RetryableError):
+    """服务不可用（503）"""
+
+    pass
+
+
+class RateLimitError(RetryableError):
+    """速率限制（429）"""
+
+    pass
+
+
+class ConnectionError(RetryableError):
+    """连接错误"""
+
+    pass
+
+
+# =============================================================================
+# 消息和响应数据类
+# =============================================================================
+
+
 class MessageRole(str, Enum):
     """消息角色"""
     SYSTEM = "system"

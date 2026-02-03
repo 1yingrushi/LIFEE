@@ -8,7 +8,7 @@ from typing import AsyncIterator, List, Optional
 from google import genai
 from google.genai import types
 
-from .base import ChatResponse, LLMProvider, Message, MessageRole
+from .base import ChatResponse, LLMProvider, Message, MessageRole, ServiceUnavailableError
 
 
 class GeminiProvider(LLMProvider):
@@ -89,11 +89,18 @@ class GeminiProvider(LLMProvider):
             temperature=temperature,
         )
 
-        response = await self._client.aio.models.generate_content(
-            model=self._model_name,
-            contents=contents,
-            config=config,
-        )
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model_name,
+                contents=contents,
+                config=config,
+            )
+        except Exception as e:
+            # 检查是否是 503 服务不可用错误
+            error_str = str(e).lower()
+            if "503" in error_str or "unavailable" in error_str or "overloaded" in error_str:
+                raise ServiceUnavailableError(f"Gemini 服务不可用: {e}") from e
+            raise
 
         return ChatResponse(
             content=response.text or "",
@@ -122,11 +129,18 @@ class GeminiProvider(LLMProvider):
             temperature=temperature,
         )
 
-        stream = await self._client.aio.models.generate_content_stream(
-            model=self._model_name,
-            contents=contents,
-            config=config,
-        )
-        async for chunk in stream:
-            if chunk.text:
-                yield chunk.text
+        try:
+            stream = await self._client.aio.models.generate_content_stream(
+                model=self._model_name,
+                contents=contents,
+                config=config,
+            )
+            async for chunk in stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            # 检查是否是 503 服务不可用错误
+            error_str = str(e).lower()
+            if "503" in error_str or "unavailable" in error_str or "overloaded" in error_str:
+                raise ServiceUnavailableError(f"Gemini 服务不可用: {e}") from e
+            raise

@@ -16,6 +16,7 @@ from lifee.providers import (
     OllamaProvider,
     OpenCodeZenProvider,
     GeminiProvider,
+    FallbackProvider,
     read_clawdbot_synthetic_credentials,
 )
 from lifee.sessions import SessionStore
@@ -151,6 +152,80 @@ def create_provider(provider_name: str = None) -> LLMProvider:
         sys.exit(1)
 
 
+def get_available_providers() -> list[str]:
+    """检测所有配置了 API Key 的 Provider
+
+    Returns:
+        可用 Provider 名称列表（按推荐优先级排序）
+    """
+    current_settings = reload_settings()
+    available = []
+
+    # 检查各 Provider 的 API Key（按优先级排序）
+    checks = [
+        ("claude", current_settings.get_anthropic_api_key()),
+        ("gemini", current_settings.google_api_key),
+        ("qwen", current_settings.qwen_api_key),
+        ("opencode", current_settings.opencode_api_key),
+        ("synthetic", current_settings.synthetic_api_key),
+        # ollama 不需要 API Key，暂不自动加入
+    ]
+
+    for name, key in checks:
+        if key:
+            available.append(name)
+
+    return available
+
+
+def create_provider_with_fallback(provider_name: str = None) -> LLMProvider:
+    """创建带 fallback 的 Provider
+
+    如果配置了 LLM_FALLBACK，当主 Provider 不可用时会自动切换到备用 Provider。
+    LLM_FALLBACK=auto 时，自动检测所有配置了 API Key 的 Provider。
+
+    Args:
+        provider_name: 指定的 Provider 名称，如果为 None 则从配置读取
+    """
+    current_settings = reload_settings()
+
+    # 创建主 Provider
+    primary = create_provider(provider_name)
+    primary_name = (provider_name or current_settings.llm_provider).lower()
+
+    # 检查是否有 fallback 配置
+    fallback_str = current_settings.llm_fallback.strip().lower()
+    if not fallback_str:
+        return primary
+
+    # 解析 fallback 列表
+    if fallback_str == "auto":
+        # 自动检测所有可用的 Provider
+        fallback_names = get_available_providers()
+    else:
+        fallback_names = [s.strip() for s in fallback_str.split(",") if s.strip()]
+
+    if not fallback_names:
+        return primary
+
+    # 创建所有 Provider
+    providers = [primary]
+    for name in fallback_names:
+        try:
+            # 跳过和主 Provider 相同的
+            if name.lower() == primary_name:
+                continue
+            providers.append(create_provider(name))
+        except Exception as e:
+            # 无法创建的 fallback Provider 跳过，但打印警告
+            print(f"[警告] 无法创建 fallback provider '{name}': {e}")
+
+    if len(providers) == 1:
+        return primary
+
+    return FallbackProvider(providers)
+
+
 def check_first_run() -> bool:
     """检查是否是首次运行（没有配置 .env）"""
     env_path = Path(".env")
@@ -197,8 +272,8 @@ async def main():
         # 重新加载配置以获取最新的 Provider 设置
         current_settings = reload_settings()
 
-        # 创建 Provider
-        provider = create_provider()
+        # 创建 Provider（带 fallback 支持）
+        provider = create_provider_with_fallback()
         current_provider_id = current_settings.llm_provider.lower()
 
         # 如果有角色且有知识库，创建/更新知识库管理器

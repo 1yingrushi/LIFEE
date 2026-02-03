@@ -9,13 +9,21 @@
 from typing import AsyncIterator, List, Optional
 
 import httpx
-from openai import AsyncOpenAI, APIConnectionError, NotFoundError
+from openai import AsyncOpenAI, APIConnectionError, NotFoundError, APIStatusError
 
-from .base import ChatResponse, LLMProvider, Message, MessageRole
+from .base import (
+    ChatResponse,
+    LLMProvider,
+    Message,
+    MessageRole,
+    ServiceUnavailableError,
+    RateLimitError,
+    ConnectionError as BaseConnectionError,
+)
 
 
-class ProviderConnectionError(Exception):
-    """Provider 连接错误"""
+class ProviderConnectionError(BaseConnectionError):
+    """Provider 连接错误（可触发 fallback）"""
     pass
 
 
@@ -124,6 +132,17 @@ class OpenAICompatProvider(LLMProvider):
                     f"模型 '{self._model}' 未找到。请先运行: ollama pull {self._model}"
                 ) from e
             raise ModelNotFoundError(f"模型 '{self._model}' 未找到") from e
+        except APIStatusError as e:
+            # 检查 HTTP 状态码
+            if e.status_code == 503:
+                raise ServiceUnavailableError(
+                    f"{self._provider_name} 服务不可用: {e}"
+                ) from e
+            if e.status_code == 429:
+                raise RateLimitError(
+                    f"{self._provider_name} 速率限制: {e}"
+                ) from e
+            raise
 
         choice = response.choices[0]
         return ChatResponse(
@@ -172,6 +191,17 @@ class OpenAICompatProvider(LLMProvider):
                     f"模型 '{self._model}' 未找到。请先运行: ollama pull {self._model}"
                 ) from e
             raise ModelNotFoundError(f"模型 '{self._model}' 未找到") from e
+        except APIStatusError as e:
+            # 检查 HTTP 状态码
+            if e.status_code == 503:
+                raise ServiceUnavailableError(
+                    f"{self._provider_name} 服务不可用: {e}"
+                ) from e
+            if e.status_code == 429:
+                raise RateLimitError(
+                    f"{self._provider_name} 速率限制: {e}"
+                ) from e
+            raise
 
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
