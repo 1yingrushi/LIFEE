@@ -10,8 +10,10 @@ from lifee.providers.base import Message
 from lifee.sessions import Session
 
 # 重试配置
-MAX_RETRIES = 2  # 最大重试次数
-RETRY_DELAY = 1.5  # 重试延迟（秒）
+MAX_RETRIES = 3  # 最大重试次数
+RETRY_DELAY = 2.0  # 重试延迟（秒）
+SPEAKER_DELAY = 5.0  # 角色之间的延迟（秒），OAuth token 需要足够长间隔避免速率限制
+DEBUG_RESPONSE = False  # 调试响应生成（设为 True 可查看详细日志）
 
 from .context import DebateContext, REPLY_SKIP_TOKEN
 from .filter import StreamingFilter
@@ -98,11 +100,13 @@ class Moderator:
         self,
         participants: list[Participant],
         session: Session,
+        user_memory_context: Optional[str] = None,
     ):
         self.participants = participants
         self.session = session
         self.round_number = 0  # 轮次计数
         self.rotation = SpeakerRotation(participants, randomize_first=True)
+        self.user_memory_context = user_memory_context  # 用户记忆上下文
 
     async def run(
         self,
@@ -137,6 +141,10 @@ class Moderator:
 
         # 2. 循环让角色发言
         for turn in range(1, max_turns + 1):
+            # 角色之间添加延迟，避免 API 速率限制
+            if turn > 1:
+                await asyncio.sleep(SPEAKER_DELAY)
+
             # 获取下一个发言者
             participant = self.rotation.next()
             # 上一个发言者（第一个角色时为 None，表示回复用户）
@@ -155,6 +163,13 @@ class Moderator:
             # 获取当前对话历史
             messages = self.session.get_messages()
 
+            # 调试：显示发送给 API 的消息结构
+            if DEBUG_RESPONSE:
+                print(f"\n[DEBUG {participant.info.display_name}] 消息数={len(messages)}")
+                for i, msg in enumerate(messages):
+                    content_preview = msg.content[:50].replace('\n', '\\n') if len(msg.content) > 50 else msg.content.replace('\n', '\\n')
+                    print(f"  [{i}] {msg.role.value} (name={msg.name}): {content_preview}...")
+
             # 带重试的响应生成
             final_response = ""
             yielded_anything = False  # 追踪是否 yield 过任何内容
@@ -164,21 +179,27 @@ class Moderator:
                 stream_filter = StreamingFilter()
                 chunk_count = 0
 
-                async for chunk in participant.respond(
-                    messages=messages,
-                    user_query=user_input if turn == 1 else "",
-                    debate_context=debate_context,
-                ):
-                    chunk_count += 1
-                    full_response += chunk
-                    filtered = stream_filter.process(chunk)
+                try:
+                    async for chunk in participant.respond(
+                        messages=messages,
+                        user_query=user_input if turn == 1 else "",
+                        debate_context=debate_context,
+                        user_memory_context=self.user_memory_context,
+                    ):
+                        chunk_count += 1
+                        full_response += chunk
+                        filtered = stream_filter.process(chunk)
 
-                    # 第一次 yield 时确保 debate.py 能检测到参与者切换
-                    if not yielded_anything:
-                        yield (participant, filtered, False)
-                        yielded_anything = True
-                    elif filtered:
-                        yield (participant, filtered, False)
+                        # 第一次 yield 时确保 debate.py 能检测到参与者切换
+                        if not yielded_anything:
+                            yield (participant, filtered, False)
+                            yielded_anything = True
+                        elif filtered:
+                            yield (participant, filtered, False)
+                except Exception as e:
+                    if DEBUG_RESPONSE:
+                        print(f"\n[{participant.info.display_name} 响应错误: {e}]")
+                    # 继续重试
 
                 # 刷新过滤器缓冲区
                 remaining = stream_filter.flush()
@@ -190,12 +211,17 @@ class Moderator:
                         yield (participant, remaining, False)
 
                 # 检查是否成功获取响应（必须有实际内容，不只是空白）
+                if DEBUG_RESPONSE:
+                    print(f"\n[DEBUG {participant.info.display_name}] turn={turn}, retry={retry}, chunks={chunk_count}, len={len(full_response)}, stripped_len={len(full_response.strip())}")
+
                 if chunk_count > 0 and full_response.strip():
                     final_response = full_response
                     break
 
                 # 空响应或只有空白，尝试重试
                 if retry < MAX_RETRIES:
+                    if DEBUG_RESPONSE:
+                        print(f"\n[{participant.info.display_name} 空响应，重试 {retry + 1}/{MAX_RETRIES}]")
                     await asyncio.sleep(RETRY_DELAY)
                     yielded_anything = False  # 重置，允许下次重试时重新 yield
                 else:
@@ -210,9 +236,16 @@ class Moderator:
                 yield (participant, "", True)
                 break
 
-            # 添加到会话历史（带上角色名字，清理可能的格式泄露）
+            # 检查是否为空响应（不保存空消息到历史）
+            cleaned_response = clean_response(final_response)
+            if not cleaned_response.strip():
+                # 空响应视为跳过
+                yield (participant, "", True)
+                break
+
+            # 添加到会话历史（带上角色名字）
             self.session.add_assistant_message(
-                content=clean_response(final_response),
+                content=cleaned_response,
                 name=participant.info.display_name,
             )
 

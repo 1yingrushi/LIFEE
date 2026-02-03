@@ -69,11 +69,11 @@ class DebateContext:
 你正在回应 {self.reply_to.emoji} {self.reply_to.display_name} 的发言。
 
 **规则**：
-- 直接回应 {self.reply_to.display_name} 的观点
-- 可以提出反驳、补充、或新的角度
-- 如果你觉得讨论已经充分，或没有更多要说的，请**只回复** `{REPLY_SKIP_TOKEN}`（不要说任何其他话）
+- 直接回应 {self.reply_to.display_name} 的观点，从你独特的视角补充或对话
+- 可以表示认同、提出不同角度、或深入探讨某个点
 - 保持简洁，每次回复控制在 2-3 段以内
-- 保持你自己的独特视角和思考方式"""
+- 保持你自己的独特视角和思考方式
+- 你必须回应，不能保持沉默"""
         else:
             # 回复用户（第一个发言）
             interaction_guide = f"""

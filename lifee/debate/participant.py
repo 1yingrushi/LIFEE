@@ -74,6 +74,7 @@ class Participant:
         messages: list[Message],
         user_query: str,
         debate_context: Optional[DebateContext] = None,
+        user_memory_context: Optional[str] = None,
     ) -> AsyncIterator[str]:
         """
         生成回应
@@ -82,6 +83,7 @@ class Participant:
             messages: 完整对话历史（包含其他参与者的发言）
             user_query: 当前用户输入（用于 RAG 搜索）
             debate_context: 辩论上下文（包含其他参与者信息、轮次等）
+            user_memory_context: 用户记忆上下文（跨会话记住的用户信息）
 
         Yields:
             流式输出的文本片段
@@ -90,7 +92,9 @@ class Participant:
         knowledge_context = await self._search_knowledge(user_query)
 
         # 2. 构建 system prompt（包含辩论上下文）
-        system = self._build_system_prompt(knowledge_context, debate_context)
+        system = self._build_system_prompt(
+            knowledge_context, debate_context, user_memory_context
+        )
 
         # 3. 调用 LLM
         async for chunk in self.provider.stream(
@@ -104,6 +108,7 @@ class Participant:
         self,
         knowledge_context: str,
         debate_context: Optional[DebateContext] = None,
+        user_memory_context: Optional[str] = None,
     ) -> str:
         """
         构建包含知识库上下文和辩论上下文的 system prompt
@@ -111,8 +116,13 @@ class Participant:
         Args:
             knowledge_context: RAG 搜索结果
             debate_context: 辩论上下文（参考 clawdbot 的 extraSystemPrompt）
+            user_memory_context: 用户记忆上下文
         """
         parts = [self.system_prompt]
+
+        # 注入用户记忆上下文（放在最前面，让角色了解用户）
+        if user_memory_context:
+            parts.append(f"关于与你对话的用户：\n{user_memory_context}")
 
         # 注入辩论上下文
         if debate_context:

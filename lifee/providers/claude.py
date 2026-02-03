@@ -146,8 +146,13 @@ class ClaudeProvider(LLMProvider):
             **kwargs,
         )
 
+        # 安全获取响应内容（防止空列表导致 IndexError）
+        content = ""
+        if response.content and len(response.content) > 0:
+            content = response.content[0].text
+
         return ChatResponse(
-            content=response.content[0].text,
+            content=content,
             model=response.model,
             usage={
                 "input_tokens": response.usage.input_tokens,
@@ -168,6 +173,17 @@ class ClaudeProvider(LLMProvider):
         msg_system, msg_list = self._convert_messages(messages)
         final_system = self._build_system_prompt(system or msg_system)
 
+        # DEBUG: 设置环境变量 LIFEE_DEBUG=1 可查看 API 调用详情
+        import os
+        if os.environ.get("LIFEE_DEBUG"):
+            print(f"\n[CLAUDE DEBUG] model={self._model}, messages={len(msg_list)}")
+            system_len = sum(len(b["text"]) for b in final_system) if isinstance(final_system, list) else len(final_system or "")
+            print(f"[CLAUDE DEBUG] system_prompt_len={system_len}")
+            for i, m in enumerate(msg_list):
+                content_len = len(m["content"])
+                preview = m["content"][:80].replace('\n', '\\n')
+                print(f"[CLAUDE DEBUG] msg[{i}] role={m['role']}, len={content_len}: {preview}...")
+
         async with self._client.messages.stream(
             model=self._model,
             max_tokens=max_tokens,
@@ -176,5 +192,11 @@ class ClaudeProvider(LLMProvider):
             messages=msg_list,
             **kwargs,
         ) as stream:
+            chunk_count = 0
             async for text in stream.text_stream:
+                chunk_count += 1
                 yield text
+
+            # DEBUG: 流结束信息
+            if os.environ.get("LIFEE_DEBUG"):
+                print(f"\n[CLAUDE DEBUG] stream ended, chunks={chunk_count}")
