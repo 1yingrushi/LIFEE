@@ -54,6 +54,29 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        const copyToClipboard = async (text) => {
+            try {
+                if (navigator?.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+            } catch (_) {}
+            try {
+                const el = document.createElement('textarea');
+                el.value = text;
+                el.setAttribute('readonly', '');
+                el.style.position = 'fixed';
+                el.style.left = '-9999px';
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        };
+
         // --- Supabase ---
         const SUPABASE_URL = "https://ncoqeewtbmzrfizoxomi.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jb3FlZXd0Ym16cmZpem94b21pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwODc2OTMsImV4cCI6MjA4NTY2MzY5M30.rfG9Ei63zEi82hbwk6ulZ-tFrAHkuBht8HbSexPZb9g";
@@ -350,6 +373,247 @@
             );
         };
 
+        const AccountModal = ({ isOpen, onClose, user, onSignOut }) => {
+            const [displayName, setDisplayName] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [status, setStatus] = useState('');
+
+            useEffect(() => {
+                let mounted = true;
+                const load = async () => {
+                    if (!isOpen || !user) return;
+                    setStatus('');
+                    const { data } = await supabaseClient.from('profiles').select('display_name').eq('id', user.id).maybeSingle();
+                    if (!mounted) return;
+                    setDisplayName(data?.display_name || user.user_metadata?.name || '');
+                };
+                load();
+                return () => { mounted = false; };
+            }, [isOpen, user?.id]);
+
+            if (!isOpen) return null;
+
+            const saveProfile = async () => {
+                if (!user) return;
+                setLoading(true);
+                setStatus('');
+                try {
+                    const next = (displayName || '').trim() || null;
+                    const { error } = await supabaseClient
+                        .from('profiles')
+                        .upsert({ id: user.id, email: user.email, display_name: next }, { onConflict: 'id' });
+                    if (error) throw error;
+                    setStatus('已保存');
+                } catch (e) {
+                    setStatus(e?.message || '保存失败');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const resetPassword = async () => {
+                if (!user?.email) return;
+                setLoading(true);
+                setStatus('');
+                try {
+                    const { error } = await supabaseClient.auth.resetPasswordForEmail(user.email, { redirectTo: window.location.href });
+                    if (error) throw error;
+                    setStatus('已发送重置密码邮件');
+                } catch (e) {
+                    setStatus(e?.message || '发送失败');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="relative w-full max-w-lg bg-white rounded-[36px] shadow-2xl border border-[#F0EDEA] p-8 md:p-10 animate-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-serif italic text-[#1A1A1A]">Manage account</h2>
+                            <button onClick={onClose} className="text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100">
+                                <Icon name="X" size={14} />
+                            </button>
+                        </div>
+                        <div className="space-y-5">
+                            <div className="p-4 rounded-3xl bg-[#FDFBF7] border border-[#F0EDEA]">
+                                <div className="text-[10px] uppercase tracking-[0.2em] opacity-50 mb-2">Email</div>
+                                <div className="text-sm font-bold text-[#1A1A1A] break-all">{user?.email || '-'}</div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="text-[10px] uppercase tracking-[0.2em] opacity-50">Display name</div>
+                                <input
+                                    className="w-full p-4 bg-[#FDFBF7] rounded-3xl border border-[#F0EDEA] transition-all focus-blue-brand"
+                                    value={displayName}
+                                    onChange={(e) => setDisplayName(e.target.value)}
+                                    placeholder="Your name..."
+                                />
+                                <button onClick={saveProfile} disabled={loading} className="w-full py-4 bg-blue-brand text-white rounded-full font-bold uppercase text-xs tracking-[0.2em] shadow-xl disabled:opacity-40">
+                                    {loading ? '处理中...' : 'Save'}
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <button onClick={resetPassword} disabled={loading} className="py-4 bg-white border border-[#E8E6E0] rounded-full font-bold uppercase text-xs tracking-[0.2em] hover:shadow-md disabled:opacity-40">
+                                    Reset password
+                                </button>
+                                <button onClick={onSignOut} className="py-4 bg-[#1A1A1A] text-white rounded-full font-bold uppercase text-xs tracking-[0.2em] shadow-xl">
+                                    Sign out
+                                </button>
+                            </div>
+
+                            {status && <div className="text-xs text-blue-brand">{status}</div>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ShareChatModal = ({ isOpen, onClose, shareText }) => {
+            const [status, setStatus] = useState('');
+            if (!isOpen) return null;
+
+            const doCopy = async () => {
+                setStatus('');
+                const ok = await copyToClipboard(shareText || '');
+                setStatus(ok ? '已复制到剪贴板' : '复制失败（请手动复制）');
+            };
+
+            const doDownload = () => {
+                try {
+                    const blob = new Blob([shareText || ''], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `lifee-chat-${Date.now()}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                    setStatus('已下载');
+                } catch (e) {
+                    setStatus(e?.message || '下载失败');
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="relative w-full max-w-3xl bg-white rounded-[36px] shadow-2xl border border-[#F0EDEA] p-8 md:p-10 animate-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-serif italic text-[#1A1A1A]">Share chat history</h2>
+                            <button onClick={onClose} className="text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100">
+                                <Icon name="X" size={14} />
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            <textarea
+                                className="w-full h-72 md:h-80 p-5 bg-[#FDFBF7] rounded-3xl border border-[#F0EDEA] text-xs md:text-sm leading-relaxed focus-blue-brand no-scrollbar"
+                                readOnly
+                                value={shareText || ''}
+                            />
+                            <div className="flex flex-col md:flex-row gap-3">
+                                <button onClick={doCopy} className="flex-1 py-4 bg-blue-brand text-white rounded-full font-bold uppercase text-xs tracking-[0.2em] shadow-xl">
+                                    Copy
+                                </button>
+                                <button onClick={doDownload} className="flex-1 py-4 bg-white border border-[#E8E6E0] rounded-full font-bold uppercase text-xs tracking-[0.2em] hover:shadow-md">
+                                    Download
+                                </button>
+                            </div>
+                            {status && <div className="text-xs text-blue-brand">{status}</div>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const SettingsView = ({
+            user,
+            isAdmin,
+            onOpenAdmin,
+            onSignOut,
+            onBack,
+            onOpenPersona,
+            onOpenCommunityPersona,
+            shareText
+        }) => {
+            const [accountOpen, setAccountOpen] = useState(false);
+            const [shareOpen, setShareOpen] = useState(false);
+
+            return (
+                <div className="p-6 md:p-12 max-w-[1100px] mx-auto animate-in space-y-10">
+                    <div className="flex items-center justify-between">
+                        <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-all">
+                            <Icon name="ChevronLeft" size={14} /> Back
+                        </button>
+                        <h2 className="text-2xl md:text-4xl font-serif italic tracking-tight text-[#1A1A1A]">Settings</h2>
+                        <div className="w-14" />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                        <button onClick={() => setAccountOpen(true)} className="group text-left bg-white p-7 rounded-[36px] border border-[#F0EDEA] shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 rounded-2xl bg-[#FDFBF7] border border-[#F0EDEA] flex items-center justify-center text-blue-brand group-hover:bg-blue-brand/10 transition-colors">
+                                    <Icon name="UserCog" size={18} />
+                                </div>
+                                <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60">Manage account</div>
+                            </div>
+                            <div className="text-sm italic opacity-60 leading-relaxed">更新昵称、重置密码、退出登录。</div>
+                            <div className="mt-5 text-[10px] font-black uppercase tracking-widest opacity-30 group-hover:text-blue-brand transition-colors">Open →</div>
+                        </button>
+
+                        <button onClick={() => setShareOpen(true)} className="group text-left bg-white p-7 rounded-[36px] border border-[#F0EDEA] shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 rounded-2xl bg-[#FDFBF7] border border-[#F0EDEA] flex items-center justify-center text-blue-brand group-hover:bg-blue-brand/10 transition-colors">
+                                    <Icon name="Share2" size={18} />
+                                </div>
+                                <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60">Share chat history</div>
+                            </div>
+                            <div className="text-sm italic opacity-60 leading-relaxed">生成可复制/下载的聊天记录摘要。</div>
+                            <div className="mt-5 text-[10px] font-black uppercase tracking-widest opacity-30 group-hover:text-blue-brand transition-colors">Open →</div>
+                        </button>
+
+                        <div className="group text-left bg-white p-7 rounded-[36px] border border-[#F0EDEA] shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all flex flex-col">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 rounded-2xl bg-[#FDFBF7] border border-[#F0EDEA] flex items-center justify-center text-blue-brand group-hover:bg-blue-brand/10 transition-colors">
+                                    <Icon name="Users" size={18} />
+                                </div>
+                                <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60">Persona</div>
+                            </div>
+                            <div className="text-sm italic opacity-60 leading-relaxed">管理你的 Voices / 进入社区 Persona 档案。</div>
+                            <div className="mt-auto pt-5 flex flex-col gap-2">
+                                <button onClick={onOpenPersona} className="w-full py-3 bg-blue-brand text-white rounded-full font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl">
+                                    Manage personas
+                                </button>
+                                <button onClick={onOpenCommunityPersona} className="w-full py-3 bg-white border border-[#E8E6E0] rounded-full font-bold uppercase text-[10px] tracking-[0.2em] hover:shadow-md">
+                                    Community persona
+                                </button>
+                                {isAdmin && (
+                                    <button onClick={onOpenAdmin} className="w-full py-3 bg-[#1A1A1A] text-white rounded-full font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl">
+                                        Admin panel
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <AccountModal
+                        isOpen={accountOpen}
+                        onClose={() => setAccountOpen(false)}
+                        user={user}
+                        onSignOut={onSignOut}
+                    />
+                    <ShareChatModal
+                        isOpen={shareOpen}
+                        onClose={() => setShareOpen(false)}
+                        shareText={shareText}
+                    />
+                </div>
+            );
+        };
+
         const AppLayout = ({ children, activeView, setView, user, isAdmin, onOpenAdmin, onLogin, onSignOut, onNewChat }) => {
             const [isCollapsed, setIsCollapsed] = useState(false);
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -399,7 +663,7 @@
                                 </button>
                             )}
                             <button className={`w-full flex items-center font-bold hover:bg-white/60 rounded-xl transition-all ${isCollapsed ? 'p-3 justify-center' : 'gap-3 px-4 py-2.5 text-xs'}`}><Icon name="HelpCircle" size={18} /><span className={isCollapsed ? 'md:hidden' : 'block'}>Help</span></button>
-                            <button className={`w-full flex items-center font-bold hover:bg-white/60 rounded-xl transition-all ${isCollapsed ? 'p-3 justify-center' : 'gap-3 px-4 py-2.5 text-xs'}`}><Icon name="Settings" size={18} /><span className={isCollapsed ? 'md:hidden' : 'block'}>Settings</span></button>
+                            <button onClick={() => { setView('settings'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center font-bold hover:bg-white/60 rounded-xl transition-all ${isCollapsed ? 'p-3 justify-center' : 'gap-3 px-4 py-2.5 text-xs'}`}><Icon name="Settings" size={18} /><span className={isCollapsed ? 'md:hidden' : 'block'}>Settings</span></button>
                         </div>
                     </aside>
 
@@ -525,14 +789,7 @@
                 }
             };
 
-            const copyText = (text) => {
-                const el = document.createElement('textarea');
-                el.value = text;
-                document.body.appendChild(el);
-                el.select();
-                document.execCommand('copy');
-                document.body.removeChild(el);
-            };
+            const copyText = (text) => { copyToClipboard(text); };
 
             const quoteText = (text, name) => {
                 const quote = `"${text}" — ${name}\n\n`;
@@ -799,6 +1056,39 @@
 
             const renderContent = () => {
                 if (view === 'community') return <CommunityView communityTab={communityTab} setCommunityTab={setCommunityTab} />;
+                if (view === 'settings') {
+                    const lastMsgs = sessionMessages.slice(-40);
+                    const summaryBlock = sessionSummaries.length
+                        ? sessionSummaries.slice(-3).map(s => `Summary(${s.start_seq || '-'}-${s.end_seq || '-'})\n${s.summary}`).join('\n\n')
+                        : '';
+                    const msgBlock = lastMsgs.map(m => `${(m.role || '').toUpperCase()}: ${m.text || ''}`).join('\n');
+                    const shareText = [
+                        `LIFEE Chat Export`,
+                        `Date: ${new Date().toISOString()}`,
+                        ``,
+                        `Situation:`,
+                        (context?.situation || '').trim() || '(empty)',
+                        ``,
+                        `Landing:`,
+                        (context?.landingPeriods || []).join(', ') || '(empty)',
+                        ``,
+                        summaryBlock ? `---\n${summaryBlock}\n---\n` : '',
+                        msgBlock ? msgBlock : '(no messages yet)'
+                    ].filter(Boolean).join('\n');
+
+                    return (
+                        <SettingsView
+                            user={user}
+                            isAdmin={isAdmin}
+                            onOpenAdmin={() => setAdminOpen(true)}
+                            onSignOut={async () => { await supabaseClient.auth.signOut(); setUser(null); }}
+                            onBack={() => setView('home')}
+                            onOpenPersona={() => setView('persona-selection')}
+                            onOpenCommunityPersona={() => { setCommunityTab('PERSONA'); setView('community'); }}
+                            shareText={shareText}
+                        />
+                    );
+                }
                 if (view === 'builder') return <PersonaBuilder onSave={(newP) => { setPersonas([...personas, {...newP, id: `custom-${Date.now()}`, category: 'CUSTOM'}]); setView('persona-selection'); }} onCancel={() => setView('persona-selection')} />;
                 if (view === 'persona-detail') return (
                     <div className="p-4 md:p-8 animate-in pb-20 overflow-y-auto no-scrollbar h-[calc(100vh-64px)]">
