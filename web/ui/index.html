@@ -10,6 +10,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2.43.4/dist/umd/supabase.js"></script>
+    <script src="./data/navigation.js"></script>
+    <script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+    <script src="./help/view.js"></script>
+    <script src="./my-chats/view.js"></script>
+    <script src="./my-personas/view.js"></script>
+    <script src="./settings/view.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap');
 
@@ -234,27 +240,27 @@
                 name: 'SERENE',
                 role: 'WARM COMFORTER',
                 category: 'SUPPORT',
-                worldview: '温柔不是软弱，是能接住风暴的力量。',
+                worldview: "Gentleness isn't weakness — it's the strength to hold the storm.",
                 avatar: '✨',
-                decisionStyle: "先安放情绪，再看选择：用小步让生活回到可承受的节奏。",
+                decisionStyle: "Settle the feelings first, then choose: take small steps until life feels bearable again.",
                 lifeContext: [
-                    { period: "学会接住自己", detail: "在低谷里学会不否定感受：先安抚，再行动。" },
-                    { period: "把日子过暖", detail: "用细小而确定的幸福感，慢慢修复和重建。" }
+                    { period: "Learning to hold myself", detail: "In the low point, I learned not to deny what I feel: soothe first, then act." },
+                    { period: "Warming the days", detail: "Repair and rebuild slowly through small, certain moments of comfort." }
                 ],
-                voice: "我们先慢一点，给自己一个拥抱；然后再一起把事情拆成今天能做的第一步。"
+                voice: "Let's slow down and give you a hug first. Then we'll break this into the first step you can do today."
             },
             {
                 id: 'architect',
                 name: 'The Entrepreneur',
                 role: 'FOUNDER / OPERATOR',
                 category: 'RATIONAL',
-                worldview: '压力不是问题，模糊才是问题。把现实拆开，找杠杆点。',
+                worldview: "Pressure isn't the problem — vagueness is. Break reality down and find the leverage.",
                 avatar: '📐',
-                decisionStyle: "高压下依然冷静：直指关键约束，追求最快反馈回路。",
+                decisionStyle: "Calm under pressure: name the key constraints and pursue the fastest feedback loop.",
                 lifeContext: [
                     { period: "Operator Mode", detail: "在不确定里做决策：用数据、节奏与复盘扛住压力。" }
                 ],
-                voice: "我会直说：你现在缺的不是答案，是一个可验证的假设和下一步。来，我们把问题落到现实。"
+                voice: "I'll be direct: you don't lack answers — you lack a testable hypothesis and the next step. Let's make this real."
             },
             {
                 id: 'rebel',
@@ -272,7 +278,7 @@
                 category: 'SUPPORT',
                 worldview: 'Warmth plus evidence turns confusion into direction.',
                 avatar: '🕯️',
-                voice: "先稳住情绪，再看事实与选择：你已经在努力了，我们可以把困惑拆成更小、可行动的片段。"
+                voice: "First, steady the emotions; then look at the facts and options. You've been trying hard — we can break the confusion into smaller, doable pieces."
             },
             {
                 id: 'krishnamurti',
@@ -325,11 +331,25 @@
         const Icon = ({ name, size = 24, className = "" }) => {
             const iconRef = useRef(null);
             useEffect(() => {
-                if (iconRef.current && window.lucide) {
-                    window.lucide.createIcons({
-                        icons: { [name]: window.lucide[name] },
+                const lucide = window.lucide;
+                if (!iconRef.current || !lucide) return;
+                const fallbackMap = {
+                    Pencil: 'PenLine',
+                    Edit: 'PenLine',
+                    Pen: 'PenLine'
+                };
+                const resolved = lucide[name] ? name : (fallbackMap[name] && lucide[fallbackMap[name]] ? fallbackMap[name] : null);
+                if (!resolved) return;
+                try {
+                    // Ensure DOM attribute matches the icon we actually render (important for fallbacks).
+                    iconRef.current.setAttribute('data-lucide', resolved);
+                    lucide.createIcons({
+                        icons: { [resolved]: lucide[resolved] },
                         attrs: { 'stroke-width': 2, 'width': size, 'height': size }
                     });
+                } catch (e) {
+                    // Avoid hard crash if an icon name is missing in current lucide build.
+                    console.warn('lucide icon render failed:', resolved, e);
                 }
             }, [name, size]);
             return <i data-lucide={name} className={className} ref={iconRef} style={{ width: size, height: size, display: 'inline-flex' }}></i>;
@@ -340,10 +360,132 @@
             return (
                 <div className={`flex items-center justify-center overflow-hidden ${className}`}>
                     {isImage ? (
-                        <img src={avatar} alt="Avatar" className="w-full h-full object-cover grayscale" />
+                        <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
                     ) : (
                         <span className="text-current leading-none">{avatar}</span>
                     )}
+                </div>
+            );
+        };
+
+        // --- User avatar (local, upload or random icon) ---
+        const USER_AVATAR_KEY = 'lifee_user_avatar';
+        const USER_AVATAR_DEFAULT_KEY = 'lifee_user_avatar_default';
+        const USER_AVATAR_CHOICES = ['✨', '🌿', '🔥', '🕯️', '🪞', '🦉', '🌊', '💎', '🎭', '🛡️', '🌱', '☁️'];
+
+        const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+        const getOrCreateDefaultUserAvatar = () => {
+            try {
+                const existing = window.localStorage.getItem(USER_AVATAR_DEFAULT_KEY);
+                if (existing) return existing;
+                const next = pickRandom(USER_AVATAR_CHOICES);
+                window.localStorage.setItem(USER_AVATAR_DEFAULT_KEY, next);
+                return next;
+            } catch (_) {
+                return '👤';
+            }
+        };
+
+        const loadUserAvatar = () => {
+            try {
+                return window.localStorage.getItem(USER_AVATAR_KEY) || getOrCreateDefaultUserAvatar();
+            } catch (_) {
+                return '👤';
+            }
+        };
+
+        const saveUserAvatar = (avatar) => {
+            try {
+                if (avatar) window.localStorage.setItem(USER_AVATAR_KEY, avatar);
+                else window.localStorage.removeItem(USER_AVATAR_KEY);
+            } catch (_) {}
+        };
+
+        const rotateUserDefaultAvatar = () => {
+            try {
+                const next = pickRandom(USER_AVATAR_CHOICES);
+                window.localStorage.setItem(USER_AVATAR_DEFAULT_KEY, next);
+                return next;
+            } catch (_) {
+                return '👤';
+            }
+        };
+
+        const fileToDataURL = (file) => new Promise((resolve, reject) => {
+            try {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = () => reject(new Error('读取文件失败'));
+                reader.readAsDataURL(file);
+            } catch (e) {
+                reject(e);
+            }
+        });
+
+        // --- Persona avatar overrides (local) ---
+        const PERSONA_AVATAR_OVERRIDES_KEY = 'lifee_persona_avatar_overrides';
+        const PERSONA_COVER_OVERRIDES_KEY = 'lifee_persona_cover_overrides';
+        const DEFAULT_PERSONA_ICONS = ['✨', '🌿', '🔥', '🕯️', '🪞', '🦉', '🌊', '💎', '🎭', '🛡️', '🌱', '☁️', '👤'];
+
+        const loadPersonaAvatarOverrides = () => {
+            try {
+                const raw = window.localStorage.getItem(PERSONA_AVATAR_OVERRIDES_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                return (parsed && typeof parsed === 'object') ? parsed : {};
+            } catch (_) {
+                return {};
+            }
+        };
+
+        const savePersonaAvatarOverrides = (map) => {
+            try {
+                window.localStorage.setItem(PERSONA_AVATAR_OVERRIDES_KEY, JSON.stringify(map || {}));
+            } catch (_) {}
+        };
+
+        const loadPersonaCoverOverrides = () => {
+            try {
+                const raw = window.localStorage.getItem(PERSONA_COVER_OVERRIDES_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                return (parsed && typeof parsed === 'object') ? parsed : {};
+            } catch (_) {
+                return {};
+            }
+        };
+
+        const savePersonaCoverOverrides = (map) => {
+            try {
+                window.localStorage.setItem(PERSONA_COVER_OVERRIDES_KEY, JSON.stringify(map || {}));
+            } catch (_) {}
+        };
+
+        const PatternCover = ({ avatar }) => {
+            const isImage = typeof avatar === 'string' && (avatar.startsWith('data:image') || avatar.startsWith('http'));
+            return (
+                <div className="absolute inset-0">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white via-[#FDFBF7] to-[#F3F1EC]" />
+                    {isImage ? (
+                        <>
+                            <div className="absolute inset-0 opacity-[0.16]">
+                                <img src={avatar} alt="cover motif" className="w-full h-full object-cover grayscale scale-110 blur-[2px]" loading="lazy" />
+                            </div>
+                            <div className="absolute inset-0 bg-white/50" />
+                        </>
+                    ) : (
+                        <>
+                            <div className="absolute -top-10 -left-8 text-[120px] opacity-[0.08] select-none">{avatar || '👤'}</div>
+                            <div className="absolute -bottom-12 -right-8 text-[140px] opacity-[0.07] select-none">{avatar || '👤'}</div>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-20 h-20 rounded-[28px] bg-white/70 border border-white shadow-sm flex items-center justify-center">
+                                    <AvatarDisplay avatar={avatar || '👤'} className="w-full h-full text-3xl opacity-60" />
+                                </div>
+                            </div>
+                        </>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/60 via-transparent to-transparent pointer-events-none" />
                 </div>
             );
         };
@@ -502,246 +644,7 @@
             );
         };
 
-        const AccountModal = ({ isOpen, onClose, user, onSignOut }) => {
-            const [displayName, setDisplayName] = useState('');
-            const [loading, setLoading] = useState(false);
-            const [status, setStatus] = useState('');
-
-            useEffect(() => {
-                let mounted = true;
-                const load = async () => {
-                    if (!isOpen || !user) return;
-                    setStatus('');
-                    const { data } = await supabaseClient.from('profiles').select('display_name').eq('id', user.id).maybeSingle();
-                    if (!mounted) return;
-                    setDisplayName(data?.display_name || user.user_metadata?.name || '');
-                };
-                load();
-                return () => { mounted = false; };
-            }, [isOpen, user?.id]);
-
-            if (!isOpen) return null;
-
-            const saveProfile = async () => {
-                if (!user) return;
-                setLoading(true);
-                setStatus('');
-                try {
-                    const next = (displayName || '').trim() || null;
-                    const { error } = await supabaseClient
-                        .from('profiles')
-                        .upsert({ id: user.id, email: user.email, display_name: next }, { onConflict: 'id' });
-                    if (error) throw error;
-                    setStatus('已保存');
-                } catch (e) {
-                    setStatus(e?.message || '保存失败');
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            const resetPassword = async () => {
-                if (!user?.email) return;
-                setLoading(true);
-                setStatus('');
-                try {
-                    const { error } = await supabaseClient.auth.resetPasswordForEmail(user.email, { redirectTo: window.location.href });
-                    if (error) throw error;
-                    setStatus('已发送重置密码邮件');
-                } catch (e) {
-                    setStatus(e?.message || '发送失败');
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose}></div>
-                    <div className="relative w-full max-w-lg bg-white rounded-[36px] shadow-2xl border border-[#F0EDEA] p-8 md:p-10 animate-in">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-serif italic text-[#1A1A1A]">Manage account</h2>
-                            <button onClick={onClose} className="text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100">
-                                <Icon name="X" size={14} />
-                            </button>
-                        </div>
-                        <div className="space-y-5">
-                            <div className="p-4 rounded-3xl bg-[#FDFBF7] border border-[#F0EDEA]">
-                                <div className="text-[10px] uppercase tracking-[0.2em] opacity-50 mb-2">Email</div>
-                                <div className="text-sm font-bold text-[#1A1A1A] break-all">{user?.email || '-'}</div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <div className="text-[10px] uppercase tracking-[0.2em] opacity-50">Display name</div>
-                                <input
-                                    className="w-full p-4 bg-[#FDFBF7] rounded-3xl border border-[#F0EDEA] transition-all focus-blue-brand"
-                                    value={displayName}
-                                    onChange={(e) => setDisplayName(e.target.value)}
-                                    placeholder="Your name..."
-                                />
-                                <button onClick={saveProfile} disabled={loading} className="w-full py-4 bg-blue-brand text-white rounded-full font-bold uppercase text-xs tracking-[0.2em] shadow-xl disabled:opacity-40">
-                                    {loading ? '处理中...' : 'Save'}
-                                </button>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <button onClick={resetPassword} disabled={loading} className="py-4 bg-white border border-[#E8E6E0] rounded-full font-bold uppercase text-xs tracking-[0.2em] hover:shadow-md disabled:opacity-40">
-                                    Reset password
-                                </button>
-                                <button onClick={onSignOut} className="py-4 bg-[#1A1A1A] text-white rounded-full font-bold uppercase text-xs tracking-[0.2em] shadow-xl">
-                                    Sign out
-                                </button>
-                            </div>
-
-                            {status && <div className="text-xs text-blue-brand">{status}</div>}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const ShareChatModal = ({ isOpen, onClose, shareText }) => {
-            const [status, setStatus] = useState('');
-            if (!isOpen) return null;
-
-            const doCopy = async () => {
-                setStatus('');
-                const ok = await copyToClipboard(shareText || '');
-                setStatus(ok ? '已复制到剪贴板' : '复制失败（请手动复制）');
-            };
-
-            const doDownload = () => {
-                try {
-                    const blob = new Blob([shareText || ''], { type: 'text/plain;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `lifee-chat-${Date.now()}.txt`;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    URL.revokeObjectURL(url);
-                    setStatus('已下载');
-                } catch (e) {
-                    setStatus(e?.message || '下载失败');
-                }
-            };
-
-            return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose}></div>
-                    <div className="relative w-full max-w-3xl bg-white rounded-[36px] shadow-2xl border border-[#F0EDEA] p-8 md:p-10 animate-in">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-serif italic text-[#1A1A1A]">Share chat history</h2>
-                            <button onClick={onClose} className="text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100">
-                                <Icon name="X" size={14} />
-                            </button>
-                        </div>
-                        <div className="space-y-4">
-                            <textarea
-                                className="w-full h-72 md:h-80 p-5 bg-[#FDFBF7] rounded-3xl border border-[#F0EDEA] text-xs md:text-sm leading-relaxed focus-blue-brand no-scrollbar"
-                                readOnly
-                                value={shareText || ''}
-                            />
-                            <div className="flex flex-col md:flex-row gap-3">
-                                <button onClick={doCopy} className="flex-1 py-4 bg-blue-brand text-white rounded-full font-bold uppercase text-xs tracking-[0.2em] shadow-xl">
-                                    Copy
-                                </button>
-                                <button onClick={doDownload} className="flex-1 py-4 bg-white border border-[#E8E6E0] rounded-full font-bold uppercase text-xs tracking-[0.2em] hover:shadow-md">
-                                    Download
-                                </button>
-                            </div>
-                            {status && <div className="text-xs text-blue-brand">{status}</div>}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const SettingsView = ({
-            user,
-            isAdmin,
-            onOpenAdmin,
-            onSignOut,
-            onBack,
-            onOpenPersona,
-            onOpenCommunityPersona,
-            shareText
-        }) => {
-            const [accountOpen, setAccountOpen] = useState(false);
-            const [shareOpen, setShareOpen] = useState(false);
-
-            return (
-                <div className="p-6 md:p-12 max-w-[1100px] mx-auto animate-in space-y-10">
-                    <div className="flex items-center justify-between">
-                        <button onClick={onBack} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-all">
-                            <Icon name="ChevronLeft" size={14} /> Back
-                        </button>
-                        <h2 className="text-2xl md:text-4xl font-serif italic tracking-tight text-[#1A1A1A]">Settings</h2>
-                        <div className="w-14" />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                        <button onClick={() => setAccountOpen(true)} className="group text-left bg-white p-7 rounded-[36px] border border-[#F0EDEA] shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="w-10 h-10 rounded-2xl bg-[#FDFBF7] border border-[#F0EDEA] flex items-center justify-center text-blue-brand group-hover:bg-blue-brand/10 transition-colors">
-                                    <Icon name="UserCog" size={18} />
-                                </div>
-                                <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60">Manage account</div>
-                            </div>
-                            <div className="text-sm italic opacity-60 leading-relaxed">更新昵称、重置密码、退出登录。</div>
-                            <div className="mt-5 text-[10px] font-black uppercase tracking-widest opacity-30 group-hover:text-blue-brand transition-colors">Open →</div>
-                        </button>
-
-                        <button onClick={() => setShareOpen(true)} className="group text-left bg-white p-7 rounded-[36px] border border-[#F0EDEA] shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="w-10 h-10 rounded-2xl bg-[#FDFBF7] border border-[#F0EDEA] flex items-center justify-center text-blue-brand group-hover:bg-blue-brand/10 transition-colors">
-                                    <Icon name="Share2" size={18} />
-                                </div>
-                                <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60">Share chat history</div>
-                            </div>
-                            <div className="text-sm italic opacity-60 leading-relaxed">生成可复制/下载的聊天记录摘要。</div>
-                            <div className="mt-5 text-[10px] font-black uppercase tracking-widest opacity-30 group-hover:text-blue-brand transition-colors">Open →</div>
-                        </button>
-
-                        <div className="group text-left bg-white p-7 rounded-[36px] border border-[#F0EDEA] shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all flex flex-col">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="w-10 h-10 rounded-2xl bg-[#FDFBF7] border border-[#F0EDEA] flex items-center justify-center text-blue-brand group-hover:bg-blue-brand/10 transition-colors">
-                                    <Icon name="Users" size={18} />
-                                </div>
-                                <div className="text-xs font-black uppercase tracking-[0.2em] opacity-60">Persona</div>
-                            </div>
-                            <div className="text-sm italic opacity-60 leading-relaxed">管理你的 Voices / 进入社区 Persona 档案。</div>
-                            <div className="mt-auto pt-5 flex flex-col gap-2">
-                                <button onClick={onOpenPersona} className="w-full py-3 bg-blue-brand text-white rounded-full font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl">
-                                    Manage personas
-                                </button>
-                                <button onClick={onOpenCommunityPersona} className="w-full py-3 bg-white border border-[#E8E6E0] rounded-full font-bold uppercase text-[10px] tracking-[0.2em] hover:shadow-md">
-                                    Community persona
-                                </button>
-                                {isAdmin && (
-                                    <button onClick={onOpenAdmin} className="w-full py-3 bg-[#1A1A1A] text-white rounded-full font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl">
-                                        Admin panel
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    <AccountModal
-                        isOpen={accountOpen}
-                        onClose={() => setAccountOpen(false)}
-                        user={user}
-                        onSignOut={onSignOut}
-                    />
-                    <ShareChatModal
-                        isOpen={shareOpen}
-                        onClose={() => setShareOpen(false)}
-                        shareText={shareText}
-                    />
-                </div>
-            );
-        };
+        // Settings components moved to `web/ui/settings/view.js`
 
         const PersonaEditModal = ({ isOpen, persona, onClose, onSave }) => {
             const [draft, setDraft] = useState(null);
@@ -830,10 +733,95 @@
             );
         };
 
+        const PersonaIconEditorModal = ({ isOpen, persona, onClose, onSetAvatar, onUseDefault }) => {
+            if (!isOpen || !persona) return null;
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="relative w-full max-w-md bg-white rounded-[36px] shadow-2xl border border-[#F0EDEA] p-8 md:p-10 animate-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="text-[10px] font-black uppercase tracking-[0.25em] opacity-40">Icon Editor</div>
+                            <button onClick={onClose} className="text-xs font-bold uppercase tracking-widest opacity-40 hover:opacity-100">
+                                <Icon name="X" size={14} />
+                            </button>
+                        </div>
+                        <div className="space-y-5">
+                            <div className="flex items-center gap-3 justify-center">
+                                <div className="w-14 h-14 rounded-2xl bg-[#FDFBF7] border border-[#F0EDEA] overflow-hidden">
+                                    <AvatarDisplay avatar={persona?.avatar} className="w-full h-full text-2xl" />
+                                </div>
+                                <label className="cursor-pointer">
+                                    <span className="px-4 h-10 inline-flex items-center rounded-full bg-blue-brand text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg hover:shadow-xl transition-all">
+                                        Upload icon
+                                    </span>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            try {
+                                                const url = await fileToDataURL(file);
+                                                onSetAvatar?.(url);
+                                            } catch (err) {
+                                                console.error(err);
+                                            } finally {
+                                                e.target.value = '';
+                                            }
+                                        }}
+                                    />
+                                </label>
+                            </div>
+                            <div className="flex flex-wrap gap-2 items-center justify-center">
+                                {DEFAULT_PERSONA_ICONS.map(ic => (
+                                    <button
+                                        key={ic}
+                                        type="button"
+                                        onClick={() => onSetAvatar?.(ic)}
+                                        className="w-10 h-10 rounded-2xl bg-white border border-[#E8E6E0] flex items-center justify-center text-xl hover:shadow-md transition-all"
+                                        title="Choose a default icon"
+                                    >
+                                        {ic}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={onUseDefault}
+                                    className="flex-1 px-4 h-11 rounded-full bg-[#FDFBF7] border border-[#E8E6E0] text-[10px] font-black uppercase tracking-[0.2em] hover:shadow-md transition-all"
+                                >
+                                    Use default
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="flex-1 px-4 h-11 rounded-full bg-blue-brand text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg hover:shadow-xl transition-all"
+                                >
+                                    Done
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const AppLayout = ({ children, activeView, setView, user, isAdmin, onOpenAdmin, onLogin, onSignOut, onNewChat }) => {
             const [isCollapsed, setIsCollapsed] = useState(false);
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const scrollContainerRef = useRef(null);
+
+            const footerItems = (window.LIFEE_UI_NAV && Array.isArray(window.LIFEE_UI_NAV.footerItems))
+                ? window.LIFEE_UI_NAV.footerItems
+                : [
+                    { id: 'my-chats', label: 'My Chats', icon: 'Archive', view: 'my-chats' },
+                    { id: 'my-personas', label: 'My Personas', icon: 'Users', view: 'my-personas' },
+                    { id: 'help', label: 'Help', icon: 'HelpCircle', view: 'help' },
+                    { id: 'settings', label: 'Settings', icon: 'Settings', view: 'settings' }
+                ];
 
             useEffect(() => {
                 const el = scrollContainerRef.current;
@@ -872,22 +860,22 @@
                             </nav>
                         </div>
                         <div className="pt-4 border-t border-[#E8E6E0] space-y-1">
-                            <button onClick={() => { setView('my-chats'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center font-bold hover:bg-white/60 rounded-xl transition-all ${isCollapsed ? 'p-3 justify-center' : 'gap-3 px-4 py-2.5 text-xs'}`}>
-                                <Icon name="Archive" size={18} />
-                                <span className={isCollapsed ? 'md:hidden' : 'block'}>My Chats</span>
-                            </button>
-                            <button onClick={() => { setView('my-personas'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center font-bold hover:bg-white/60 rounded-xl transition-all ${isCollapsed ? 'p-3 justify-center' : 'gap-3 px-4 py-2.5 text-xs'}`}>
-                                <Icon name="Users" size={18} />
-                                <span className={isCollapsed ? 'md:hidden' : 'block'}>My Personas</span>
-                            </button>
+                            {footerItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => { setView(item.view); setIsMobileMenuOpen(false); }}
+                                    className={`w-full flex items-center font-bold hover:bg-white/60 rounded-xl transition-all ${isCollapsed ? 'p-3 justify-center' : 'gap-3 px-4 py-2.5 text-xs'} ${activeView === item.view ? 'text-blue-brand' : ''}`}
+                                >
+                                    <Icon name={item.icon} size={18} />
+                                    <span className={isCollapsed ? 'md:hidden' : 'block'}>{item.label}</span>
+                                </button>
+                            ))}
                             {isAdmin && (
                                 <button onClick={onOpenAdmin} className={`w-full flex items-center font-bold hover:bg-white/60 rounded-xl transition-all ${isCollapsed ? 'p-3 justify-center' : 'gap-3 px-4 py-2.5 text-xs'}`}>
                                     <Icon name="Shield" size={18} />
                                     <span className={isCollapsed ? 'md:hidden' : 'block'}>Admin</span>
                                 </button>
                             )}
-                            <button className={`w-full flex items-center font-bold hover:bg-white/60 rounded-xl transition-all ${isCollapsed ? 'p-3 justify-center' : 'gap-3 px-4 py-2.5 text-xs'}`}><Icon name="HelpCircle" size={18} /><span className={isCollapsed ? 'md:hidden' : 'block'}>Help</span></button>
-                            <button onClick={() => { setView('settings'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center font-bold hover:bg-white/60 rounded-xl transition-all ${isCollapsed ? 'p-3 justify-center' : 'gap-3 px-4 py-2.5 text-xs'}`}><Icon name="Settings" size={18} /><span className={isCollapsed ? 'md:hidden' : 'block'}>Settings</span></button>
                         </div>
                     </aside>
 
@@ -955,7 +943,8 @@
             setView,
             ensureSession,
             persistMessage,
-            buildContextBlock
+            buildContextBlock,
+            userAvatar
         }) => {
             const [history, setHistory] = useState([]);
             const [options, setOptions] = useState([]);
@@ -1032,7 +1021,9 @@
                     <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-8 space-y-10 pb-64 no-scrollbar">
                         {history.map((m, idx) => {
                             const isUser = m.personaId === 'user';
-                            const p = isUser ? { name: 'YOU', avatar: '👤' } : (selectedPersonas.find(x => x.id === m.personaId) || (m.personaId === "system" ? { name: "SYSTEM", avatar: "⚠️" } : { name: 'Voice', avatar: '☁️' }));
+                            const p = isUser
+                                ? { name: 'YOU', avatar: (userAvatar || loadUserAvatar()) }
+                                : (selectedPersonas.find(x => x.id === m.personaId) || (m.personaId === "system" ? { name: "SYSTEM", avatar: "⚠️" } : { name: 'Voice', avatar: '☁️' }));
                             return (
                                 <div key={idx} className={`flex gap-4 md:gap-5 ${isUser ? 'flex-row-reverse' : 'items-start'} animate-in`}>
                                     <div className={`w-10 h-10 md:w-11 md:h-11 rounded-full border flex items-center justify-center shadow-sm shrink-0 bg-white overflow-hidden ${isUser ? 'border-blue-brand/30' : 'border-[#F0EDEA]'}`}><AvatarDisplay avatar={p.avatar} className="w-full h-full text-2xl" /></div>
@@ -1114,12 +1105,15 @@
             const [communityTab, setCommunityTab] = useState('DEBATE');
             const [user, setUser] = useState(null);
             const [authOpen, setAuthOpen] = useState(false);
+            const [userAvatar, setUserAvatar] = useState(() => loadUserAvatar());
             const [sessionId, setSessionId] = useState(null);
             const [sessionMessages, setSessionMessages] = useState([]);
             const [sessionSummaries, setSessionSummaries] = useState([]);
             const [summaryEvery, setSummaryEvery] = useState(SUMMARY_EVERY_DEFAULT);
             const [contextWindow, setContextWindow] = useState(CONTEXT_WINDOW_DEFAULT);
             const [personaAssets, setPersonaAssets] = useState({});
+            const [personaAvatarOverrides, setPersonaAvatarOverrides] = useState(() => loadPersonaAvatarOverrides());
+            const [personaCoverOverrides, setPersonaCoverOverrides] = useState(() => loadPersonaCoverOverrides());
             const [adminOpen, setAdminOpen] = useState(false);
             const [chatSessions, setChatSessions] = useState([]);
             const [chatSessionsLoading, setChatSessionsLoading] = useState(false);
@@ -1129,12 +1123,17 @@
             const [chatStatus, setChatStatus] = useState('');
             const [favoritePersonas, setFavoritePersonas] = useState([]);
             const [editPersona, setEditPersona] = useState(null);
+            const [personaIconEditorOpen, setPersonaIconEditorOpen] = useState(false);
 
             const sessionMessagesRef = useRef([]);
 
             useEffect(() => {
                 sessionMessagesRef.current = sessionMessages;
             }, [sessionMessages]);
+
+            useEffect(() => {
+                if (view !== 'persona-detail' && personaIconEditorOpen) setPersonaIconEditorOpen(false);
+            }, [view, personaIconEditorOpen]);
 
             useEffect(() => {
                 let mounted = true;
@@ -1164,6 +1163,14 @@
                     window.localStorage.setItem('lifee_favorite_personas', JSON.stringify(favoritePersonas || []));
                 } catch (_) {}
             }, [favoritePersonas]);
+
+            useEffect(() => {
+                savePersonaAvatarOverrides(personaAvatarOverrides || {});
+            }, [personaAvatarOverrides]);
+
+            useEffect(() => {
+                savePersonaCoverOverrides(personaCoverOverrides || {});
+            }, [personaCoverOverrides]);
 
             useEffect(() => {
                 if (!user) return;
@@ -1349,7 +1356,10 @@
             const isAdmin = user?.email === ADMIN_EMAIL;
             const displayPersonas = personas.map(p => {
                 const asset = personaAssets[p.id];
-                return asset ? { ...p, avatar: asset.avatar_url || p.avatar, cover_url: asset.cover_url } : p;
+                const override = personaAvatarOverrides?.[p.id];
+                const nextAvatar = override || asset?.avatar_url || p.avatar;
+                const nextCover = personaCoverOverrides?.[p.id] || asset?.cover_url || p.cover_url || null;
+                return { ...p, avatar: nextAvatar, cover_url: nextCover };
             });
 
             const refreshChatSessions = async () => {
@@ -1457,144 +1467,39 @@
                         onToggleFavorite={toggleFavoritePersona}
                     />
                 );
+                if (view === 'help') {
+                    return window.LIFEE_VIEWS?.help?.({ onBack: () => setView('home') }) || null;
+                }
                 if (view === 'my-chats') {
-                    return (
-                        <div className="p-6 md:p-12 max-w-[1300px] mx-auto animate-in space-y-8">
-                            <div className="flex items-center justify-between">
-                                <button onClick={() => setView('home')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-all">
-                                    <Icon name="ChevronLeft" size={14} /> Back
-                                </button>
-                                <h2 className="text-2xl md:text-4xl font-serif italic tracking-tight text-[#1A1A1A]">My Chats</h2>
-                                <button onClick={refreshChatSessions} className="text-[10px] font-black uppercase tracking-widest text-blue-brand">Refresh</button>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="md:col-span-1 space-y-4">
-                                    <div className="text-[10px] uppercase tracking-[0.2em] opacity-50">Sessions</div>
-                                    <div className="bg-white rounded-[28px] border border-[#F0EDEA] p-4 space-y-3 max-h-[60vh] overflow-y-auto no-scrollbar">
-                                        {chatSessionsLoading && <div className="text-xs opacity-40">Loading...</div>}
-                                        {!chatSessionsLoading && (chatSessions || []).length === 0 && <div className="text-xs opacity-40">No chats yet</div>}
-                                        {(chatSessions || []).map(s => (
-                                            <div key={s.id} className={`p-3 rounded-2xl border ${chatDetailSession?.id === s.id ? 'border-blue-brand bg-blue-brand/5' : 'border-[#F0EDEA]'} transition-all`}>
-                                                <div className="text-xs font-bold text-[#1A1A1A] truncate">{s.title || 'New Chat'}</div>
-                                                <div className="text-[10px] opacity-40 mt-1">Updated: {new Date(s.updated_at || s.latest_message_at || Date.now()).toLocaleString()}</div>
-                                                <div className="mt-3 flex gap-2">
-                                                    <button onClick={() => loadSessionDetail(s)} className="flex-1 py-2 bg-white border border-[#E8E6E0] rounded-full text-[10px] font-bold uppercase tracking-[0.2em] hover:shadow-md">View</button>
-                                                    <button onClick={() => deleteSession(s)} className="flex-1 py-2 bg-[#FDF1F1] border border-[#F7D7D7] rounded-full text-[10px] font-bold uppercase tracking-[0.2em] hover:shadow-md text-[#C97A7A]">Delete</button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="md:col-span-2 space-y-4">
-                                    <div className="text-[10px] uppercase tracking-[0.2em] opacity-50">Details & Actions</div>
-                                    <div className="bg-white rounded-[28px] border border-[#F0EDEA] p-6 space-y-5 min-h-[40vh]">
-                                        {!chatDetailSession && <div className="text-xs opacity-40">Select a chat to view details.</div>}
-                                        {chatDetailSession && (
-                                            <>
-                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                                    <div>
-                                                        <div className="text-lg font-bold text-[#1A1A1A]">{chatDetailSession.title || 'New Chat'}</div>
-                                                        <div className="text-[10px] opacity-40">Session ID: {chatDetailSession.id}</div>
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => uploadChatToCommunity(chatDetailSession, chatDetailMessages, chatDetailSummaries)}
-                                                            className="px-4 py-2 bg-blue-brand text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg"
-                                                        >
-                                                            Upload to Community
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                const text = buildShareTextFromSession(chatDetailSession.title, chatDetailMessages, chatDetailSummaries);
-                                                                copyToClipboard(text);
-                                                                setChatStatus('Copied');
-                                                            }}
-                                                            className="px-4 py-2 bg-white border border-[#E8E6E0] rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:shadow-md"
-                                                        >
-                                                            Copy Text
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <textarea
-                                                    className="w-full h-72 md:h-80 p-5 bg-[#FDFBF7] rounded-3xl border border-[#F0EDEA] text-xs md:text-sm leading-relaxed focus-blue-brand no-scrollbar"
-                                                    readOnly
-                                                    value={buildShareTextFromSession(chatDetailSession.title, chatDetailMessages, chatDetailSummaries)}
-                                                />
-                                                {chatStatus && <div className="text-xs text-blue-brand">{chatStatus}</div>}
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    );
+                    return window.LIFEE_VIEWS?.myChats?.({
+                        onBack: () => setView('home'),
+                        refreshChatSessions,
+                        chatSessionsLoading,
+                        chatSessions,
+                        chatDetailSession,
+                        loadSessionDetail,
+                        deleteSession,
+                        uploadChatToCommunity,
+                        chatDetailMessages,
+                        chatDetailSummaries,
+                        buildShareTextFromSession,
+                        copyToClipboard,
+                        setChatStatus,
+                        chatStatus
+                    }) || null;
                 }
                 if (view === 'my-personas') {
-                    const myPersonas = displayPersonas.filter(p => p.category === 'CUSTOM' || p.id.startsWith('custom-'));
-                    return (
-                        <div className="p-6 md:p-12 max-w-[1300px] mx-auto animate-in space-y-10">
-                            <div className="flex items-center justify-between">
-                                <button onClick={() => setView('home')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-all">
-                                    <Icon name="ChevronLeft" size={14} /> Back
-                                </button>
-                                <h2 className="text-2xl md:text-4xl font-serif italic tracking-tight text-[#1A1A1A]">My Personas</h2>
-                                <button onClick={() => setView('builder')} className="text-[10px] font-black uppercase tracking-widest text-blue-brand">New Persona</button>
-                            </div>
-                            <div className="space-y-6">
-                                <div className="flex items-center justify-between">
-                                    <div className="text-[10px] uppercase tracking-[0.2em] opacity-50">My Created Personas</div>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                    {myPersonas.length === 0 && <div className="text-xs opacity-40">No custom personas</div>}
-                                    {myPersonas.map(p => (
-                                        <div key={p.id} className="relative p-6 bg-white rounded-[36px] border border-[#F0EDEA] shadow-sm hover:shadow-xl transition-all flex flex-col">
-                                            <div className="flex items-center gap-3 mb-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-[#FDFBF7] border border-[#F0EDEA] flex items-center justify-center">
-                                                    <AvatarDisplay avatar={p.avatar} className="w-full h-full text-2xl" />
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-black text-[#1A1A1A]">{p.name}</div>
-                                                    <div className="text-[9px] uppercase font-black tracking-widest text-blue-brand/60">{p.role}</div>
-                                                </div>
-                                            </div>
-                                            <p className="text-xs italic opacity-50 leading-relaxed line-clamp-3">“{p.worldview}”</p>
-                                            <div className="mt-5 pt-5 border-t border-[#F0EDEA] flex gap-2">
-                                                <button onClick={() => setEditPersona(p)} className="flex-1 py-2 bg-white border border-[#E8E6E0] rounded-full text-[10px] font-black uppercase tracking-[0.2em] hover:shadow-md">Edit</button>
-                                                <button onClick={() => uploadPersonaToCommunity(p)} className="flex-1 py-2 bg-blue-brand text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-lg">Upload</button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="space-y-6">
-                                <div className="flex items-center justify-between">
-                                    <div className="text-[10px] uppercase tracking-[0.2em] opacity-50">Favorite Personas</div>
-                                    <button onClick={() => { setCommunityTab('PERSONA'); setView('community'); }} className="text-[10px] font-black uppercase tracking-widest text-blue-brand">Go to Community</button>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                    {(favoritePersonas || []).length === 0 && <div className="text-xs opacity-40">No favorites yet</div>}
-                                    {(favoritePersonas || []).map(p => (
-                                        <div key={p.id} className="relative p-6 bg-white rounded-[36px] border border-[#F0EDEA] shadow-sm hover:shadow-xl transition-all flex flex-col">
-                                            <button onClick={() => toggleFavoritePersona(p)} className="absolute top-4 right-4 w-8 h-8 rounded-full border border-[#E8E6E0] flex items-center justify-center text-[#5D576B]/40 hover:text-blue-brand">
-                                                <Icon name="X" size={14} />
-                                            </button>
-                                            <div className="flex items-center gap-3 mb-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-[#FDFBF7] border border-[#F0EDEA] flex items-center justify-center">
-                                                    <AvatarDisplay avatar={p.avatar} className="w-full h-full text-2xl" />
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-black text-[#1A1A1A]">{p.name}</div>
-                                                    <div className="text-[9px] uppercase font-black tracking-widest text-blue-brand/60">{p.role}</div>
-                                                </div>
-                                            </div>
-                                            <p className="text-xs italic opacity-50 leading-relaxed line-clamp-3">“{p.worldview}”</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            {chatStatus && <div className="text-xs text-blue-brand">{chatStatus}</div>}
-                        </div>
-                    );
+                    return window.LIFEE_VIEWS?.myPersonas?.({
+                        onBack: () => setView('home'),
+                        displayPersonas,
+                        favoritePersonas,
+                        setEditPersona,
+                        uploadPersonaToCommunity,
+                        toggleFavoritePersona,
+                        goToCommunity: () => { setCommunityTab('PERSONA'); setView('community'); },
+                        onNewPersona: () => setView('builder'),
+                        chatStatus
+                    }) || null;
                 }
                 if (view === 'settings') {
                     const lastMsgs = sessionMessages.slice(-40);
@@ -1616,44 +1521,141 @@
                         msgBlock ? msgBlock : '(no messages yet)'
                     ].filter(Boolean).join('\n');
 
-                    return (
-                        <SettingsView
-                            user={user}
-                            isAdmin={isAdmin}
-                            onOpenAdmin={() => setAdminOpen(true)}
-                            onSignOut={async () => { await supabaseClient.auth.signOut(); setUser(null); }}
-                            onBack={() => setView('home')}
-                            onOpenPersona={() => setView('persona-selection')}
-                            onOpenCommunityPersona={() => { setCommunityTab('PERSONA'); setView('community'); }}
-                            shareText={shareText}
-                        />
-                    );
+                    return window.LIFEE_VIEWS?.settings?.({
+                        user,
+                        isAdmin,
+                        onOpenAdmin: () => setAdminOpen(true),
+                        onSignOut: async () => { await supabaseClient.auth.signOut(); setUser(null); },
+                        onBack: () => setView('home'),
+                        onOpenPersona: () => setView('persona-selection'),
+                        onOpenCommunityPersona: () => { setCommunityTab('PERSONA'); setView('community'); },
+                        shareText,
+                        userAvatar,
+                        onUserAvatarChange: (a) => setUserAvatar(a || loadUserAvatar())
+                    }) || null;
                 }
                 if (view === 'builder') return <PersonaBuilder onSave={(newP) => { setPersonas([...personas, {...newP, id: `custom-${Date.now()}`, category: 'CUSTOM'}]); setView('persona-selection'); }} onCancel={() => setView('persona-selection')} />;
-                if (view === 'persona-detail') return (
-                    <div className="p-4 md:p-8 animate-in pb-20 overflow-y-auto no-scrollbar h-[calc(100vh-64px)]">
-                        <div className="max-w-4xl mx-auto bg-white rounded-[40px] md:rounded-[60px] p-6 md:p-12 shadow-2xl border border-[#F0EDEA] relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-brand/5 rounded-bl-full" />
-                            <div className="flex justify-between mb-8 md:mb-16 relative z-10"><button onClick={() => setView('persona-selection')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-all"><Icon name="ChevronLeft" size={14} /> Back</button><span className="text-[10px] uppercase font-bold opacity-30 tracking-[0.3em]">Archive ID: {detailPersona?.id.toUpperCase()}</span></div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 mb-12 md:mb-16"><div className="bg-white p-4 shadow-lg border border-[#F0EDEA] rotate-[-2deg] rounded-2xl overflow-hidden"><AvatarDisplay avatar={detailPersona?.avatar} className="aspect-[3/4] bg-slate-50 text-7xl md:text-9xl rounded-xl" /></div><div className="flex flex-col justify-center space-y-4 md:space-y-6 text-center md:text-left"><h1 className="text-4xl md:text-6xl font-black text-[#1A1A1A] italic tracking-tighter uppercase leading-tight">{detailPersona?.name}</h1><p className="text-xs md:text-sm font-bold text-blue-brand uppercase tracking-[0.4em]">{detailPersona?.role}</p><div className="h-px w-20 bg-blue-brand/30 mx-auto md:mx-0" /><p className="text-lg md:text-xl italic opacity-70 leading-relaxed">“{detailPersona?.worldview}”</p></div></div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-12 font-sans text-left">
-                                <div className="md:col-span-2 p-6 md:p-10 bg-[#FDFBF7] border-2 border-dashed border-[#D1CEC7] rounded-3xl space-y-8">
-                                    <div><h3 className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-6">Soul & Wisdom</h3><h4 className="text-[10px] font-black uppercase text-[#D1CEC7] tracking-widest mb-2">Decision Priorities</h4><p className="text-sm italic leading-relaxed">{detailPersona?.decisionStyle || "Grounded and reflective."}</p></div>
-                                    <div className="space-y-4 pt-2">
-                                        {detailPersona?.lifeContext?.map((item, idx) => (
-                                            <div key={idx} className="flex gap-4"><span className="text-xs font-mono opacity-20 mt-1">[{idx+1}]</span><div><h5 className="font-bold text-sm text-[#1A1A1A]">{item.period}</h5><p className="text-xs opacity-50 italic">{item.detail}</p></div></div>
-                                        ))}
+                if (view === 'persona-detail') {
+                    const cover = detailPersona?.cover_url || null;
+                    const hasCover = !!(cover && typeof cover === 'string');
+                    return (
+                        <div className="p-4 md:p-8 animate-in pb-20 overflow-y-auto no-scrollbar h-[calc(100vh-64px)]">
+                            <div className={`max-w-5xl mx-auto ${hasCover ? 'bg-transparent' : 'bg-white'} rounded-[40px] md:rounded-[60px] p-6 md:p-12 shadow-2xl border border-[#F0EDEA] relative overflow-hidden`}>
+                                {hasCover && (
+                                    <div className="absolute inset-0">
+                                        <img src={cover} alt="persona cover" className="w-full h-full object-cover grayscale scale-105" loading="lazy" />
+                                        <div className="absolute inset-0 bg-white/80" />
+                                    </div>
+                                )}
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-brand/5 rounded-bl-full" />
+                                <div className="flex justify-between mb-8 md:mb-16 relative z-10"><button onClick={() => setView('persona-selection')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-all"><Icon name="ChevronLeft" size={14} /> Back</button><span className="text-[10px] uppercase font-bold opacity-30 tracking-[0.3em]">Archive ID: {detailPersona?.id.toUpperCase()}</span></div>
+                                <div className="grid grid-cols-1 md:grid-cols-[360px_minmax(0,1fr)] gap-8 md:gap-12 mb-12 md:mb-16 relative z-10">
+                                    <div className="space-y-4 flex flex-col items-center md:items-start">
+                                        <div className="bg-white p-4 shadow-lg border border-[#F0EDEA] rotate-[-2deg] rounded-2xl overflow-hidden w-full sm:max-w-[300px] mx-auto md:mx-0">
+                                            <div className="text-[10px] font-black uppercase tracking-[0.25em] opacity-40 mb-3 text-center">Card Background</div>
+                                            <label className="block relative cursor-pointer group w-full sm:max-w-[240px] mx-auto">
+                                                <div className="absolute inset-0 rounded-xl ring-0 group-hover:ring-2 group-hover:ring-blue-brand/20 transition-all pointer-events-none" />
+                                                <div className="aspect-[3/4] bg-slate-50 rounded-xl overflow-hidden relative">
+                                                    {hasCover ? (
+                                                        <img src={cover} alt="cover preview" className="absolute inset-0 w-full h-full object-cover grayscale" loading="lazy" />
+                                                    ) : (
+                                                        <div className="absolute inset-0 bg-gradient-to-br from-white via-[#FDFBF7] to-[#F3F1EC]" />
+                                                    )}
+                                                    <div className="absolute inset-0 bg-gradient-to-br from-white/50 via-transparent to-transparent pointer-events-none" />
+                                                    <div className="absolute inset-0 flex items-end justify-center pb-4 pointer-events-none">
+                                                        <div className="px-4 py-2 bg-white/85 border border-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] opacity-70 group-hover:opacity-100 transition-opacity">
+                                                            Click to upload background
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={async (e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file || !detailPersona?.id) return;
+                                                        try {
+                                                            const url = await fileToDataURL(file);
+                                                            setPersonaCoverOverrides(prev => ({ ...(prev || {}), [detailPersona.id]: url }));
+                                                            setDetailPersona(prev => prev ? ({ ...prev, cover_url: url }) : prev);
+                                                        } catch (err) {
+                                                            console.error(err);
+                                                        } finally {
+                                                            e.target.value = '';
+                                                        }
+                                                    }}
+                                                />
+                                            </label>
+                                            <div className="mt-4 flex items-center justify-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (!detailPersona?.id) return;
+                                                        setPersonaCoverOverrides(prev => {
+                                                            const next = { ...(prev || {}) };
+                                                            delete next[detailPersona.id];
+                                                            return next;
+                                                        });
+                                                        const baseCover = personaAssets?.[detailPersona.id]?.cover_url || null;
+                                                        setDetailPersona(prev => prev ? ({ ...prev, cover_url: baseCover }) : prev);
+                                                    }}
+                                                    className="px-4 h-10 rounded-full bg-[#FDFBF7] border border-[#E8E6E0] text-[10px] font-black uppercase tracking-[0.2em] hover:shadow-md transition-all"
+                                                >
+                                                    Use default background
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col justify-center space-y-4 md:space-y-6 text-center md:text-left">
+                                        <div className="flex justify-center md:justify-start">
+                                            <div className="relative inline-flex">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPersonaIconEditorOpen(true)}
+                                                    className="w-16 h-16 rounded-3xl bg-[#FDFBF7] border border-[#F0EDEA] overflow-hidden shadow-sm hover:shadow-md transition-all"
+                                                    title="Edit icon"
+                                                    aria-label="Edit persona icon"
+                                                >
+                                                    <AvatarDisplay avatar={detailPersona?.avatar} className="w-full h-full text-3xl" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPersonaIconEditorOpen(true)}
+                                                    className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-white/95 backdrop-blur border border-[#F0EDEA] shadow-md hover:shadow-lg transition-all flex items-center justify-center text-blue-brand"
+                                                    title="Edit icon"
+                                                    aria-label="Edit persona icon"
+                                                >
+                                                    <Icon name="Pencil" size={15} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <h1 className="text-4xl md:text-6xl font-black text-[#1A1A1A] italic tracking-tighter uppercase leading-tight">{detailPersona?.name}</h1>
+                                        <p className="text-xs md:text-sm font-bold text-blue-brand uppercase tracking-[0.4em]">{detailPersona?.role}</p>
+                                        <div className="h-px w-20 bg-blue-brand/30 mx-auto md:mx-0" />
+                                        <p className="text-lg md:text-xl italic opacity-70 leading-relaxed">“{detailPersona?.worldview}”</p>
                                     </div>
                                 </div>
-                                <div className="p-6 md:p-8 bg-white border border-[#F0EDEA] rounded-3xl shadow-sm text-center">
-                                    <h3 className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-8">Voice</h3>
-                                    <p className="text-xs md:text-sm italic text-neutral-600 border-l-2 border-blue-brand/20 pl-4 py-2 text-left">{detailPersona?.voice}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-12 font-sans text-left relative z-10">
+                                    <div className="md:col-span-2 p-6 md:p-10 bg-[#FDFBF7] border-2 border-dashed border-[#D1CEC7] rounded-3xl space-y-8">
+                                        <div><h3 className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-6">Soul & Wisdom</h3><h4 className="text-[10px] font-black uppercase text-[#D1CEC7] tracking-widest mb-2">Decision Priorities</h4><p className="text-sm italic leading-relaxed">{detailPersona?.decisionStyle || "Grounded and reflective."}</p></div>
+                                        <div className="space-y-4 pt-2">
+                                            {detailPersona?.lifeContext?.map((item, idx) => (
+                                                <div key={idx} className="flex gap-4"><span className="text-xs font-mono opacity-20 mt-1">[{idx+1}]</span><div><h5 className="font-bold text-sm text-[#1A1A1A]">{item.period}</h5><p className="text-xs opacity-50 italic">{item.detail}</p></div></div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="p-6 md:p-8 bg-white border border-[#F0EDEA] rounded-3xl shadow-sm text-center">
+                                        <h3 className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-8">Voice</h3>
+                                        <p className="text-xs md:text-sm italic text-neutral-600 border-l-2 border-blue-brand/20 pl-4 py-2 text-left">{detailPersona?.voice}</p>
+                                    </div>
                                 </div>
+                                <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-[#F0EDEA] gap-4 relative z-10"><p className="text-[10px] italic opacity-40 uppercase tracking-widest text-center">Observation over noise.</p><button onClick={() => { if(!selectedIds.includes(detailPersona?.id)) setSelectedIds([...selectedIds, detailPersona?.id]); setView('persona-selection'); }} className={`w-full md:w-auto px-10 py-4 rounded-full font-black uppercase tracking-widest text-[10px] transition-all shadow-xl ${selectedIds.includes(detailPersona?.id) ? 'bg-slate-200 text-slate-50' : 'bg-blue-brand text-white shadow-blue-brand/20'}`}>{selectedIds.includes(detailPersona?.id) ? 'In Panel' : 'Invite to Debate'}</button></div>
                             </div>
-                            <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-[#F0EDEA] gap-4"><p className="text-[10px] italic opacity-40 uppercase tracking-widest text-center">Observation over noise.</p><button onClick={() => { if(!selectedIds.includes(detailPersona?.id)) setSelectedIds([...selectedIds, detailPersona?.id]); setView('persona-selection'); }} className={`w-full md:w-auto px-10 py-4 rounded-full font-black uppercase tracking-widest text-[10px] transition-all shadow-xl ${selectedIds.includes(detailPersona?.id) ? 'bg-slate-200 text-slate-50' : 'bg-blue-brand text-white shadow-blue-brand/20'}`}>{selectedIds.includes(detailPersona?.id) ? 'In Panel' : 'Invite to Debate'}</button></div>
                         </div>
-                    </div>
-                );
+                    );
+                }
                 if (view === 'persona-selection') {
                     const filtered = category === 'ALL' ? displayPersonas : displayPersonas.filter(p => p.category === category);
                     return (
@@ -1685,22 +1687,7 @@
                                             <div className="absolute top-6 left-6 w-12 h-12 rounded-2xl bg-white/70 border border-white shadow-sm flex items-center justify-center overflow-hidden z-20">
                                                 <AvatarDisplay avatar={p.avatar} className="w-full h-full text-2xl" />
                                             </div>
-                                            <div className="mb-6 relative w-full aspect-[4/3] rounded-[28px] border border-[#F0EDEA] bg-[#FDFBF7] overflow-hidden shadow-sm">
-                                                {p.cover_url ? (
-                                                    <img
-                                                        src={p.cover_url}
-                                                        alt={`${p.name || 'persona'} cover`}
-                                                        className="absolute inset-0 w-full h-full object-cover grayscale"
-                                                        loading="lazy"
-                                                    />
-                                                ) : (
-                                                    <div className="absolute inset-0">
-                                                        <div className="absolute top-12 left-5 right-5 bottom-5 rounded-[24px] border border-dashed border-[#E8E6E0] opacity-60" />
-                                                        <div className="absolute bottom-4 right-5 text-[9px] font-black uppercase tracking-[0.3em] opacity-20">IMAGE</div>
-                                                    </div>
-                                                )}
-                                                <div className="absolute inset-0 bg-gradient-to-br from-white/60 via-transparent to-transparent pointer-events-none" />
-                                            </div>
+                                            <div className="flex-1" />
                                             <div className="mt-auto text-left space-y-2"><h4 className="font-black text-xl md:text-2xl text-[#1A1A1A] tracking-tighter uppercase italic">{p.name}</h4><p className="text-[7px] md:text-[8px] uppercase font-black tracking-widest text-blue-brand/80">{p.role}</p><p className="text-[10px] md:text-xs italic opacity-40 leading-relaxed line-clamp-2">“{p.worldview}”</p></div>
                                         </div>
                                     );
@@ -1719,6 +1706,7 @@
                         ensureSession={ensureSession}
                         persistMessage={persistMessage}
                         buildContextBlock={buildContextBlock}
+                        userAvatar={userAvatar}
                     />
                 );
                 if (view === 'summary') return <div className="text-center py-32 md:py-48 px-4 animate-in space-y-8 md:space-y-10 max-w-2xl mx-auto"><div className="text-5xl md:text-7xl animate-bounce">🌱</div><h2 className="text-3xl md:text-5xl font-serif italic text-[#1A1A1A] tracking-tight">Pattern Observed</h2><button onClick={handleNewChat} className="px-12 md:px-16 py-5 md:py-6 bg-blue-brand text-white rounded-full font-black shadow-xl uppercase tracking-widest text-[9px] md:text-[10px] hover:shadow-2xl transition-all">Start New Chapter</button></div>;
@@ -1833,6 +1821,26 @@
                         onSave={(next) => {
                             setPersonas(prev => prev.map(p => p.id === next.id ? next : p));
                             setEditPersona(null);
+                        }}
+                    />
+                    <PersonaIconEditorModal
+                        isOpen={personaIconEditorOpen}
+                        persona={detailPersona}
+                        onClose={() => setPersonaIconEditorOpen(false)}
+                        onSetAvatar={(value) => {
+                            if (!detailPersona?.id) return;
+                            setPersonaAvatarOverrides(prev => ({ ...(prev || {}), [detailPersona.id]: value }));
+                            setDetailPersona(prev => prev ? ({ ...prev, avatar: value }) : prev);
+                        }}
+                        onUseDefault={() => {
+                            if (!detailPersona?.id) return;
+                            setPersonaAvatarOverrides(prev => {
+                                const next = { ...(prev || {}) };
+                                delete next[detailPersona.id];
+                                return next;
+                            });
+                            const base = personaAssets?.[detailPersona.id]?.avatar_url || personas.find(x => x.id === detailPersona.id)?.avatar || '👤';
+                            setDetailPersona(prev => prev ? ({ ...prev, avatar: base }) : prev);
                         }}
                     />
                 </div>
