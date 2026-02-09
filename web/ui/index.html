@@ -106,6 +106,58 @@
         .sidebar-transition {
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        /* 建议问题滚动条样式 */
+        .suggested-questions-scroll {
+            width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 6px 0 14px 0;
+            -webkit-overflow-scrolling: touch;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .suggested-questions-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .suggested-questions-container {
+            display: inline-flex;
+            gap: 12px;
+            padding: 0 4px;
+            min-width: 100%;
+        }
+        .question-capsule {
+            /* Tailwind preflight 可能会把 button 背景设为 transparent，这里用 !important 保证实心按钮 */
+            background: #FFFFFF !important;
+            background-color: #FFFFFF !important;
+            border: 1px solid rgba(232, 230, 224, 0.85);
+            border-radius: 9999px;
+            padding: 12px 20px;
+            white-space: nowrap;
+            font-size: 13px;
+            color: #5D576B;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+            box-shadow: none;
+        }
+        .question-capsule:hover {
+            border-color: #98A6D4;
+            color: #98A6D4;
+            background: #FFFFFF !important;
+            background-color: #FFFFFF !important;
+            box-shadow: none;
+            transform: translateY(-1px);
+        }
+        @media (min-width: 768px) {
+            .question-capsule {
+                padding: 14px 24px;
+                font-size: 14px;
+            }
+            .suggested-questions-container {
+                gap: 16px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1671,8 +1723,33 @@
                 );
                 if (view === 'summary') return <div className="text-center py-32 md:py-48 px-4 animate-in space-y-8 md:space-y-10 max-w-2xl mx-auto"><div className="text-5xl md:text-7xl animate-bounce">🌱</div><h2 className="text-3xl md:text-5xl font-serif italic text-[#1A1A1A] tracking-tight">Pattern Observed</h2><button onClick={handleNewChat} className="px-12 md:px-16 py-5 md:py-6 bg-blue-brand text-white rounded-full font-black shadow-xl uppercase tracking-widest text-[9px] md:text-[10px] hover:shadow-2xl transition-all">Start New Chapter</button></div>;
                 return (
-                    <section className="space-y-10 md:space-y-16 py-10 md:py-20 px-4 max-w-3xl mx-auto w-full animate-in flex flex-col items-center">
-                        <header className="mb-6 md:mb-10 text-center space-y-3"><h1 className="text-6xl md:text-8xl font-black tracking-tighter text-blue-brand uppercase italic leading-none">LIFEE</h1><p className="italic text-[8px] md:text-[10px] text-[#C1C1C1] uppercase tracking-[0.4em] md:tracking-[0.6em] font-black font-sans">YOUR LIFE & FRIEND COACH</p></header>
+                    <section className="space-y-6 md:space-y-10 py-10 md:py-20 px-4 max-w-3xl mx-auto w-full animate-in flex flex-col items-center">
+                        <header className="mb-2 md:mb-4 text-center space-y-3"><h1 className="text-6xl md:text-8xl font-black tracking-tighter text-blue-brand uppercase italic leading-none">LIFEE</h1><p className="italic text-[8px] md:text-[10px] text-[#C1C1C1] uppercase tracking-[0.4em] md:tracking-[0.6em] font-black font-sans">YOUR LIFE & FRIEND COACH</p></header>
+                        {(() => {
+                            const suggestedQuestions = [
+                                "I have so many hobbies, but why do I still feel empty inside?",
+                                "How should young adults navigate the confusing years of their twenties?",
+                                "When chasing a crush, is it better to confess directly or take it slow?",
+                                "I'm approaching 30. With no house, no kids and the low cost of silence, I should seriously consider long-term development. I'm very torn about whether to leave or stay in Beijing.",
+                                "For those who entered the entertainment industry because of fandom, how's life treating you now?"
+                            ];
+                            return (
+                                <div className="w-full suggested-questions-scroll">
+                                    <div className="suggested-questions-container">
+                                        {suggestedQuestions.map((question, index) => (
+                                            <button
+                                                key={index}
+                                                type="button"
+                                                className="question-capsule"
+                                                onClick={() => setContext({...context, situation: question})}
+                                            >
+                                                {question}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                         <div className="w-full bg-white p-8 md:p-16 rounded-[40px] md:rounded-[70px] shadow-sm border border-[#F0EDEA] text-center relative overflow-hidden transition-all hover:shadow-xl"><div className="absolute top-0 right-0 p-8 md:p-12 opacity-5"><Icon name="Sparkles" size={64} /></div><h2 className="text-xl md:text-3xl font-serif italic mb-6 md:mb-10 text-[#1A1A1A] tracking-tight">“Let them argue, you decide.”</h2><textarea className="w-full h-40 md:h-52 p-6 md:p-8 bg-[#FDFBF7]/50 rounded-[30px] md:rounded-[40px] border-2 border-transparent focus-blue-brand transition-all duration-300 focus:outline-none text-base md:text-xl leading-relaxed placeholder:italic no-scrollbar" placeholder="Describe the current tension..." value={context.situation} onChange={(e) => setContext({...context, situation: e.target.value})} /></div>
                         <div className="space-y-6 md:space-y-8 px-4 text-center w-full">
                             <h3 className="text-xs md:text-sm font-black uppercase tracking-[0.3em] text-[#5D576B]/70">WHEN IS THIS LANDING?</h3>
