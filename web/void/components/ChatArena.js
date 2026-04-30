@@ -354,8 +354,21 @@
         }
         if (method === 'bazi') {
             return zh
-                ? `${personaName || '八字师'}需要先知道：出生日期（注明公历/农历）、出生时间或时辰、出生地，以及你这次具体想问什么。你可以直接按这四项发给我。`
-                : `${personaName || 'Ba Zi reader'} needs your birth date, birth time, birthplace, and the concrete question. Send those four items and we can continue.`;
+                ? [
+                    `我是${personaName || '八字师'}。八字和紫微要先验盘，不建议只凭一句话硬断。`,
+                    `请先发这些资料：`,
+                    `1. 性别：坤造/乾造。`,
+                    `2. 公历出生年月日、具体出生时间到分钟。`,
+                    `3. 出生地：国家/省/市/区。`,
+                    `4. 已排出的年柱/月柱/日柱/时柱（如果有）。`,
+                    `5. 紫微排盘截图（可以用文墨天机先排好）。`,
+                    `资料到齐后，我会先说外貌性格和 2-3 件关键经历给你核对；核对准了，再继续讲身强身弱、喜忌格局、大运、家庭事业婚姻财富健康和子女运。`,
+                ].join('\n')
+                : [
+                    `I am ${personaName || 'the Ba Zi reader'}. Ba Zi and Zi Wei should be verified before a full reading.`,
+                    `Please send: sex, Gregorian birth date, exact birth time, birthplace, the four pillars if already calculated, your Zi Wei chart screenshot, and the concrete question.`,
+                    `Once the chart is verified, I will move into strength, useful elements, structure, luck cycles, family, career, marriage, wealth, health, and children prospects.`,
+                ].join('\n');
         }
         if (method === 'tarot') {
             return zh

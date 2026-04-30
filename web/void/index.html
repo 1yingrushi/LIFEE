@@ -202,8 +202,8 @@
     <!-- 共享自 web/ui 的常量与 API helper（INITIAL_PERSONAS 等）。
          /constants.js、/api.js 之前能取到是因为根 mount 指向 web/ui，
          现在根换成 web/void 之后必须显式走 /ui/ 路径。 -->
-    <script src="/ui/constants.js?v=20260430-mystic-png-avatars"></script>
-    <script src="/ui/api.js?v=20260430-mystic-png-avatars"></script>
+    <script src="/ui/constants.js?v=20260506-bazi-ditiansui"></script>
+    <script src="/ui/api.js?v=20260506-bazi-ditiansui"></script>
 
     <!-- Void-specific component files -->
     <script src="./components/ui.js"></script>
@@ -2325,7 +2325,7 @@
             // Mystical sub-mode → persona auto-lock map. Currently only 印占
             // pins the 印占师 voice; 八字/塔罗 keep free selection until those
             // analyst personas are wired in.
-            const MYSTIC_LOCK_MAP = { seal: 'seal-master', tarot: 'tarot-reader' };
+            const MYSTIC_LOCK_MAP = { seal: 'seal-master', bazi: 'bazi-master', tarot: 'tarot-reader' };
 
             // Conversation mode (null = default multi-voice council)
             // 从 localStorage 读上次选择，仅认白名单值；未知值忽略，避免脏数据。
