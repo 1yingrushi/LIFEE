@@ -739,6 +739,18 @@
             });
         }, [initialMessages]);
 
+        // 同上：initialRoadmap 也是 restoreSession 之后异步到的。
+        // session-switch effect 只依赖 parentSessionId，触发时 initialRoadmap 还是 null，
+        // 之后 setSessionRoadmap 再设上来时不会触发它 → pathOptions 永远是空的。
+        // 只在本地树为空时回填，避免覆盖用户刚 walk 出来的本地状态。
+        useEffect(() => {
+            if ((parentSessionId || '') !== (sessionIdRef.current || '')) return;
+            const rm = initialRoadmap;
+            if (!rm || !Array.isArray(rm.nodes) || !rm.nodes.length) return;
+            setPathOptions(prev => (prev && prev.length ? prev : rm.nodes));
+            setWalkedPathIds(prev => (prev && prev.size ? prev : new Set(Array.isArray(rm.walkedIds) ? rm.walkedIds : [])));
+        }, [initialRoadmap]);
+
         // ── Close more menu on outside click ─────────────────────────────────
         useEffect(() => {
             if (!showMoreMenu) return;
@@ -1107,6 +1119,12 @@
         const handleSummary = async () => {
             if (history.length < 2 || summaryLoading) return;
 
+            // Roadmap 模式下小头像是折叠态，点 Summary 把所有头像一次性展开
+            // 成完整摘要卡（树继续显示在旁边）。非 roadmap 模式 expandedAvatars
+            // 用不到，写了也没副作用。
+            const allIds = (selectedPersonas || []).map(p => p.id).filter(Boolean);
+            if (allIds.length) setExpandedAvatars(new Set(allIds));
+
             // Return cached if nothing new
             if (
                 summaryAtCountRef.current === history.length &&
@@ -1193,6 +1211,8 @@
             setPathLoading(true);
             setPathError('');
             setShowVoiceMap(true);
+            // 进 roadmap 默认折叠所有头像（用户可以点头像或 Summary 再展开）。
+            setExpandedAvatars(new Set());
             // roadmap 模式下默认把 voice map 拉到全屏；用容器宽度而非视口宽度，
             // 避免主 Sidebar 那段被错算进去导致按钮跑屏外。
             const containerW = chatRootRef.current?.offsetWidth;
@@ -1942,6 +1962,9 @@
             };
             const startCardDrag = (e, id) => {
                 e.stopPropagation();
+                // 阻止浏览器在 <img> 上触发 HTML5 原生拖拽 / 文本选择 ——
+                // 否则用户按住头像移动会变成"拖图片"，把整张卡片拖飞。
+                e.preventDefault();
                 const pos = cardPos[id] || { x: 0, y: 0 };
                 cardRef.current = { id, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
                 dragMovedRef.current = false;

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LIFEE</title>
 
-    <!-- Tailwind CSS CDN with Void color theme config -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS Play CDN (本地打包，国内 cdn.tailwindcss.com 经常 ERR_CONNECTION_RESET) -->
+    <script src="./vendor/tailwind.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -207,7 +207,7 @@
 
     <!-- Void-specific component files -->
     <script src="./components/ui.js"></script>
-    <script src="./components/ChatArena.js?v=20260501-input-typeable"></script>
+    <script src="./components/ChatArena.js?v=20260501-summary-expand-all"></script>
     <script src="./components/modals.js?v=20260430-mystic-png-avatars"></script>
     <script src="./components/PersonaRecommendModal.js?v=20260430-mystic-png-avatars"></script>
 
