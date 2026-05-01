@@ -2980,13 +2980,12 @@
                                     <span class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary border border-surface-container-lowest"></span>
                                 ` : null}
                             </div>
-                            <!-- Textarea -->
+                            <!-- Textarea：streaming 时也允许输入，按发送会进 pendingInput 排队 -->
                             <textarea
                                 ref=${inputFieldRef}
                                 maxLength=${1000}
                                 rows=${1}
-                                placeholder="Type a transmission..."
-                                disabled=${isDebating}
+                                placeholder=${t('chat.inputPlaceholder')}
                                 class="flex-1 bg-transparent text-sm text-on-surface placeholder-on-surface-variant/30 resize-none focus:outline-none focus:ring-0 border-none min-h-[36px] max-h-[140px] px-4 py-3 font-body leading-relaxed overflow-y-auto"
                                 style=${{ scrollbarWidth: 'none' }}
                                 value=${inputValue}
@@ -2996,7 +2995,8 @@
                                     e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
                                 }}
                                 onKeyDown=${(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey && inputValue.trim()) {
+                                    // streaming 时允许打字但 Enter 不发送（避免抢回合）
+                                    if (e.key === 'Enter' && !e.shiftKey && inputValue.trim() && !isDebating) {
                                         e.preventDefault();
                                         runRound();
                                     }
@@ -3009,7 +3009,7 @@
                             ` : null}
 
                             <div class="flex items-center gap-2 pr-2 shrink-0">
-                                <!-- Send / Stop button: switches to stop while streaming -->
+                                <!-- 发送 / 停止按钮：streaming 时变停止，否则发送 -->
                                 <button
                                     disabled=${!isDebating && !inputValue.trim()}
                                     onClick=${isDebating ? handleStop : () => runRound()}
