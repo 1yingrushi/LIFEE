@@ -825,8 +825,12 @@ async def redeem(req: RedeemRequest, request: Request):
 
 
 @app.get("/credits/generate/{n}")
-async def gen_codes(n: int = 10, credits: int = 100):
+async def gen_codes(request: Request, n: int = 10, credits: int = 100):
     """生成兑换码（管理员用）。credits 参数指定面额，默认 100"""
+    expected = os.getenv("ADMIN_TOKEN", "")
+    provided = request.headers.get("x-admin-token", "")
+    if not expected or provided != expected:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     codes = await _generate_redeem_codes(n, credits)
     return {"codes": codes, "credits_each": credits}
 
