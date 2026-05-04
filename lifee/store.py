@@ -312,6 +312,23 @@ def credits_debit(uid: str, amount: int = 1, reason: str = "chat") -> bool:
     return True
 
 
+def credits_credit(uid: str, amount: int, reason: str) -> None:
+    """加余额 + 记流水（amount 正数）。用于退款 / 礼物 / 兑换。"""
+    c = _get_conn()
+    with c:
+        cur = c.execute("SELECT balance FROM user_credits WHERE uid=?", (uid,)).fetchone()
+        new_bal = (int(cur["balance"]) if cur else 0) + amount
+        c.execute(
+            "INSERT INTO user_credits (uid, balance, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(uid) DO UPDATE SET balance=excluded.balance, updated_at=excluded.updated_at",
+            (uid, new_bal, now()),
+        )
+        c.execute(
+            "INSERT INTO credit_transactions (uid, amount, reason, created_at) VALUES (?, ?, ?, ?)",
+            (uid, amount, reason, now()),
+        )
+
+
 def credits_migrate(from_uid: str, to_uid: str) -> None:
     """把 from_uid 的余额合并到 to_uid。失败静默。"""
     if not from_uid or from_uid == to_uid:

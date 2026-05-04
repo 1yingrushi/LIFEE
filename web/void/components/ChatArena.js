@@ -453,6 +453,25 @@
                 window.localStorage.setItem('lifee_summary_store', JSON.stringify(store));
             } catch (_) {}
         };
+        // Plan：按 sessionId + chosenOption 索引，刷新后能复用，不再次扣费
+        const _planKey = (sid, opt) => `${sid || ''}::${(opt || '').trim()}`;
+        const loadPlanStore = () => {
+            try { return JSON.parse(window.localStorage.getItem('lifee_plan_store') || '{}') || {}; }
+            catch (_) { return {}; }
+        };
+        const getPlanCache = (sid, opt) => {
+            if (!sid) return null;
+            const store = loadPlanStore();
+            return store[_planKey(sid, opt)] || null;
+        };
+        const savePlanCache = (sid, opt, plan) => {
+            if (!sid) return;
+            try {
+                const store = loadPlanStore();
+                store[_planKey(sid, opt)] = plan;
+                window.localStorage.setItem('lifee_plan_store', JSON.stringify(store));
+            } catch (_) {}
+        };
         const [summaryLoading, setSummaryLoading] = useState(false);
         // Roadmap 模式：基于对话推 3 条根路径，用户可对任意路径点 "Walk this →"
         // 调 /simulate-path 让它再分叉出 3 条新路径，最深 3 层。点 Plan → 仍然
@@ -1159,9 +1178,15 @@
                 const r = await window.fetch('/summarize', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: payload,
                 });
                 const res = await r.json();
+                if (window.__lifeeMaybe402?.(res)) {
+                    setSummaryData({});
+                    return;
+                }
+                window.__lifeeRefreshBalance?.();
                 if (res?.error) {
                     setSummaryData({ _error: res.error });
                 } else if (res?.summaries && Object.keys(res.summaries).length > 0) {
@@ -1231,13 +1256,20 @@
                 const r = await window.fetch('/path-options', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: payload,
                 });
+                if (r.status === 402) {
+                    const data = await r.json().catch(() => ({}));
+                    window.__lifeeMaybe402?.(data);
+                    return;
+                }
                 if (!r.ok) {
                     const txt = await r.text();
                     throw new Error(`Server ${r.status}: ${txt.slice(0, 100)}`);
                 }
                 const res = await r.json();
+                window.__lifeeRefreshBalance?.();
                 if (res?.error && (!res?.paths || res.paths.length < 2)) throw new Error(res.error);
                 const paths = Array.isArray(res?.paths) ? res.paths : [];
                 if (paths.length < 2) throw new Error('Not enough paths returned');
@@ -1303,10 +1335,17 @@
                 const r = await window.fetch('/simulate-path', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: payload,
                 });
+                if (r.status === 402) {
+                    const data = await r.json().catch(() => ({}));
+                    window.__lifeeMaybe402?.(data);
+                    return;
+                }
                 if (!r.ok) throw new Error(`Server ${r.status}`);
                 const res = await r.json();
+                window.__lifeeRefreshBalance?.();
                 if (res?.error && (!res?.paths || res.paths.length < 2)) throw new Error(res.error);
                 const childPaths = Array.isArray(res?.paths) ? res.paths : [];
                 if (childPaths.length < 2) throw new Error('Not enough child paths');
@@ -1411,6 +1450,15 @@
 
         const generatePlan = async (chosenOption = '') => {
             if (planLoading) return;
+            const sid = sessionIdRef.current || sessionId;
+            // 已经为这个 (session, chosenOption) 生成过 → 直接复用，不扣费
+            const cached = getPlanCache(sid, chosenOption);
+            if (cached?.weeks?.length) {
+                setPlanData(cached);
+                setPlanWeek(0);
+                setShowPlanModal(true);
+                return;
+            }
             setPlanLoading(true);
             setPlanData(null);
             setPlanWeek(0);
@@ -1430,10 +1478,16 @@
                 const r = await window.fetch('/plan-30-days', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: payload,
                 });
                 const res = await r.json();
-                if (res?.plan?.weeks) setPlanData(res.plan);
+                if (window.__lifeeMaybe402?.(res)) return;
+                window.__lifeeRefreshBalance?.();
+                if (res?.plan?.weeks) {
+                    setPlanData(res.plan);
+                    savePlanCache(sid, chosenOption, res.plan);
+                }
             } catch (_) {
                 /* swallow — modal shows fallback */
             } finally {
@@ -1965,7 +2019,17 @@
                 // 阻止浏览器在 <img> 上触发 HTML5 原生拖拽 / 文本选择 ——
                 // 否则用户按住头像移动会变成"拖图片"，把整张卡片拖飞。
                 e.preventDefault();
-                const pos = cardPos[id] || { x: 0, y: 0 };
+                // path 卡的渲染位置是 cardPos[id] || layout fallback；
+                // 没拖过的卡 cardPos[id]=undefined，但实际 DOM 位置由 layout 决定。
+                // 直接把它当作 (0,0) 起点，会让第一次拖动瞬间跳到左上。
+                // 改成从 DOM 当前 inline style 读真实位置作为 fallback。
+                let pos = cardPos[id];
+                if (!pos) {
+                    const el = e.currentTarget;
+                    const x = parseFloat(el?.style?.left) || 0;
+                    const y = parseFloat(el?.style?.top) || 0;
+                    pos = { x, y };
+                }
                 cardRef.current = { id, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
                 dragMovedRef.current = false;
             };
@@ -2119,25 +2183,27 @@
                                 onClick=${handleSummary}
                                 disabled=${history.length < 2 || summaryLoading}
                                 class="no-shine px-2 h-7 rounded-md btn-ghost text-[9px] uppercase tracking-wider flex items-center gap-1 disabled:opacity-30"
-                                title="Summarize each voice"
+                                title="Summarize each voice · 1 credit"
                             >
                                 ${summaryLoading
                                     ? html`<span class="material-symbols-outlined animate-spin" style=${{ fontSize: '12px' }}>progress_activity</span>`
                                     : html`<span class="material-symbols-outlined" style=${{ fontSize: '12px' }}>summarize</span>`
                                 }
                                 <span>${t('chat.summary')}</span>
+                                <span class="opacity-50">· 1${t('credit.suffix')}</span>
                             </button>
                             <button
                                 onClick=${generateRoadmap}
                                 disabled=${history.length < 2 || pathLoading}
                                 class=${`no-shine px-2 h-7 rounded-md btn-ghost text-[9px] uppercase tracking-wider flex items-center gap-1 disabled:opacity-30 ${pathOptions.length > 0 ? 'text-secondary' : ''}`}
-                                title="Sketch 3-6 possible life paths from this conversation"
+                                title="Sketch 3-6 possible life paths from this conversation · 2 credits"
                             >
                                 ${pathLoading
                                     ? html`<span class="material-symbols-outlined animate-spin" style=${{ fontSize: '12px' }}>progress_activity</span>`
                                     : html`<span class="material-symbols-outlined" style=${{ fontSize: '12px' }}>route</span>`
                                 }
                                 <span>${t('chat.roadmap') || 'Roadmap'}</span>
+                                <span class="opacity-50">· 2${t('credit.suffix')}</span>
                             </button>
                             <button onClick=${reset}
                                 class="no-shine px-2 h-7 rounded-md btn-ghost text-[9px] uppercase tracking-wider"
@@ -2479,15 +2545,15 @@
                                                             disabled=${isSimulating}
                                                             class=${`no-shine text-[7px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
                                                             title=${isWalked ? 'Re-simulate consequences from this path' : 'Simulate consequences if you walked this path'}
-                                                        >${isSimulating ? '…' : (isWalked ? 'Re-walk' : 'Walk →')}</button>
+                                                        >${isSimulating ? '…' : (isWalked ? `Re-walk · 2${t('credit.suffix')}` : `Walk · 2${t('credit.suffix')} →`)}</button>
                                                     ` : null}
                                                     <button
                                                         onMouseDown=${(e) => e.stopPropagation()}
                                                         onClick=${() => generatePlan(p.label || '')}
                                                         disabled=${planLoading}
                                                         class=${`no-shine text-[7px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
-                                                        title="Generate full 30-day plan for this path"
-                                                    >Plan →</button>
+                                                        title="Generate full 30-day plan for this path · 3 credits"
+                                                    >Plan · 3${t('credit.suffix')} →</button>
                                                 </div>
                                             </div>
                                             <div class="px-4 py-3.5">
@@ -3153,8 +3219,7 @@
                                             ` : null}
                                             <div class="flex flex-col gap-2.5">
                                                 ${(week.tasks || []).map((task, ti) => html`
-                                                    <div key=${ti} class="bg-surface-container-high/40 border border-white/10 rounded-xl px-4 py-3 flex gap-3 items-start">
-                                                        <div class="w-[18px] h-[18px] rounded-full border border-white/30 shrink-0 mt-0.5"></div>
+                                                    <div key=${ti} class="bg-surface-container-high/40 border border-white/10 rounded-xl px-4 py-3">
                                                         <div class="min-w-0 flex-1">
                                                             <div class="text-[13px] font-black text-on-surface mb-1">${task.title || ''}</div>
                                                             <div class="text-[11px] text-on-surface-variant/65 leading-relaxed mb-2">${task.description || ''}</div>

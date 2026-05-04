@@ -143,6 +143,8 @@
             .then(r => r && !signal.aborted ? r.json() : null)
             .then(data => {
                 if (!data || signal.aborted) { setGenerating(false); return; }
+                if (window.__lifeeMaybe402?.(data)) { setGenerating(false); return; }
+                window.__lifeeRefreshBalance?.();
                 if (Array.isArray(data.personas) && data.personas.length > 0) setGenerated(data.personas);
                 setGenerating(false);
             })
@@ -209,7 +211,7 @@
                             <div>
                                 <p class="text-[9px] uppercase tracking-[0.3em] font-bold text-secondary/80 mb-2 flex items-center gap-1.5">
                                     <span class="inline-block w-3 h-3 border-2 border-secondary/60 border-t-transparent rounded-full animate-spin"></span>
-                                    ${window.t?.('recommend.generating') || 'Creating new voices just for you…'}
+                                    ${window.t?.('recommend.generating') || 'Creating new voices just for you…'} <span class="opacity-60">· 3${window.t?.('credit.suffix') || 'cr'}</span>
                                 </p>
                                 <div class="grid grid-cols-2 gap-3">
                                     <${SkeletonCard} /><${SkeletonCard} />

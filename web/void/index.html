@@ -207,9 +207,9 @@
 
     <!-- Void-specific component files -->
     <script src="./components/ui.js"></script>
-    <script src="./components/ChatArena.js?v=20260501-summary-expand-all"></script>
+    <script src="./components/ChatArena.js?v=20260504-plan-cache"></script>
     <script src="./components/modals.js?v=20260430-mystic-png-avatars"></script>
-    <script src="./components/PersonaRecommendModal.js?v=20260430-mystic-png-avatars"></script>
+    <script src="./components/PersonaRecommendModal.js?v=20260504-balance-refresh"></script>
 
     <style>
         * { box-sizing: border-box; }
@@ -696,13 +696,17 @@
             'chat.quote':        { en: 'Quote',         zh: '引用' },
             'chat.suggested':    { en: 'suggested follow-ups', zh: '建议提问' },
             'chat.summary':      { en: 'Summary',       zh: '摘要' },
+            'chat.actionPlan':   { en: 'Action Plan',     zh: '行动计划' },
+            'chat.first30Days':  { en: 'My First 30 Days', zh: '我的前 30 天' },
+            'chat.planCrafting': { en: 'Crafting your 30-day plan…', zh: '正在生成 30 天计划…' },
+            'chat.planFailed':   { en: 'Failed to generate plan. Try again.', zh: '生成计划失败，请重试。' },
             'chat.summarizing':  { en: 'Summarizing…',  zh: '正在摘要…' },
             'chat.roadmap':      { en: 'Roadmap',       zh: '路线图' },
             'chat.voiceMap':     { en: 'Voice Archive', zh: '声音档案' },
             'chat.reset':        { en: 'Fit',           zh: '适配' },
             'chat.close':        { en: 'Close',         zh: '关闭' },
             'chat.webSearch':    { en: 'Web Search',    zh: '联网搜索' },
-            'chat.webSearchDesc': { en: 'Ground answers in live web results', zh: '基于实时网络搜索结果' },
+            'chat.webSearchDesc': { en: 'Ground answers in live web results · +1 credit per turn', zh: '基于实时网络搜索结果 · 每轮 +1 credit' },
             'chat.followUp':     { en: 'Follow-up Questions', zh: '追问' },
             'chat.inputPlaceholder': { en: 'Type a transmission...', zh: '输入你想说的话……' },
             'warmup.convening':  { en: 'Taking seats',                   zh: '正在落座圆桌' },
@@ -785,6 +789,8 @@
             'redeem.placeholder':{ en: 'Enter code',     zh: '输入兑换码' },
             'redeem.action':     { en: 'Redeem',         zh: '兑换' },
             'redeem.redeeming':  { en: 'Redeeming…',     zh: '兑换中…' },
+            'redeem.insufficient': { en: 'This action needs {needed} credits. You have {balance}. Redeem a code to continue.', zh: '该操作需要 {needed} credits，当前余额 {balance}。请先兑换继续。' },
+            'credit.suffix':     { en: 'cr', zh: 'cr' },
 
             // Auth modal
             'auth.welcomeBack':  { en: 'Welcome back',   zh: '欢迎回来' },
@@ -1120,7 +1126,44 @@
             // Default: Chinese if browser lang starts with zh, else English.
             return (navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en';
         })();
-        const t = (key) => (I18N[key] && I18N[key][window.__lifeeLocale]) || I18N[key]?.en || key;
+        // 付费 fetch 通用 402 处理：data 是已解析 JSON。若是 insufficient_credits
+        // 弹兑换码 modal 并返回 true（调用方应中止后续逻辑）。
+        window.__lifeeMaybe402 = function(data) {
+            if (data && data.error === 'insufficient_credits') {
+                if (typeof data.balance === 'number') {
+                    window.__lifeeBalance = data.balance;
+                    window.dispatchEvent(new CustomEvent('lifee:balance', { detail: data.balance }));
+                }
+                window.dispatchEvent(new CustomEvent('lifee:insufficient-credits', {
+                    detail: { needed: data.needed, balance: data.balance, reason: data.reason }
+                }));
+                return true;
+            }
+            return false;
+        };
+
+        // 付费 fetch 完成后调用一次，从 /credits 拉最新余额并广播 lifee:balance
+        // 让所有显示余额的组件刷新。可重复调用，安全。
+        window.__lifeeRefreshBalance = async function() {
+            try {
+                const r = await fetch('/credits', { credentials: 'include' });
+                const d = await r.json();
+                if (typeof d.balance === 'number') {
+                    window.__lifeeBalance = d.balance;
+                    window.dispatchEvent(new CustomEvent('lifee:balance', { detail: d.balance }));
+                }
+            } catch (_) { /* 失败静默；下次扣费再试 */ }
+        };
+
+        const t = (key, params) => {
+            let s = (I18N[key] && I18N[key][window.__lifeeLocale]) || I18N[key]?.en || key;
+            if (params && typeof s === 'string') {
+                for (const k of Object.keys(params)) {
+                    s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), String(params[k]));
+                }
+            }
+            return s;
+        };
         const setLocale = (loc) => {
             if (loc !== 'en' && loc !== 'zh') return;
             window.__lifeeLocale = loc;
@@ -1846,7 +1889,7 @@
         // ══════════════════════════════════════════════
         //  REDEEM MODAL — redeem a credit code
         // ══════════════════════════════════════════════
-        function RedeemModal({ isOpen, onClose, user }) {
+        function RedeemModal({ isOpen, onClose, user, reason }) {
             const [code, setCode]       = useState('');
             const [loading, setLoading] = useState(false);
             const [status, setStatus]   = useState('');
@@ -1905,6 +1948,12 @@
                                 <span class="material-symbols-outlined" style=${{ fontSize: '14px' }}>close</span>
                             </button>
                         </div>
+
+                        ${reason && typeof reason.needed === 'number' ? html`
+                            <div class="mb-5 px-4 py-3 rounded-xl bg-tertiary/10 border border-tertiary/20 text-xs text-tertiary/90 leading-relaxed">
+                                ${t('redeem.insufficient', { needed: reason.needed, balance: reason.balance ?? 0 })}
+                            </div>
+                        ` : null}
 
                         <p class="text-sm text-on-surface-variant/70 mb-6 leading-relaxed">
                             ${t('redeem.desc')}
@@ -2327,6 +2376,7 @@
                 const res = await fetch('/followup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({
                         userInput: '',  // transcript already carries the last line
                         personas: selectedPersonas.map(p => ({
@@ -2339,6 +2389,8 @@
                     }),
                 });
                 const data = await res.json().catch(() => ({}));
+                if (window.__lifeeMaybe402?.(data)) return null;
+                window.__lifeeRefreshBalance?.();
                 return data?.data || null;
             };
 
@@ -4238,6 +4290,17 @@
             const [user, setUser] = useState(() => window.__lifeePreload?.user || null);
             const [authOpen, setAuthOpen] = useState(false);
             const [redeemOpen, setRedeemOpen] = useState(false);
+            const [redeemReason, setRedeemReason] = useState(null); // {needed, balance, reason} | null
+
+            // 任何付费 fetch 拿到 402 时 dispatch lifee:insufficient-credits → 自动开 RedeemModal
+            useEffect(() => {
+                const onInsuff = (e) => {
+                    setRedeemReason(e?.detail || null);
+                    setRedeemOpen(true);
+                };
+                window.addEventListener('lifee:insufficient-credits', onInsuff);
+                return () => window.removeEventListener('lifee:insufficient-credits', onInsuff);
+            }, []);
             const [feedbackOpen, setFeedbackOpen] = useState(false);
             const [shareOpen, setShareOpen] = useState(false);
             const [shareText, setShareText] = useState('');
@@ -4818,8 +4881,9 @@
                     <!-- Redeem modal (app-level so any view can trigger it) -->
                     <${RedeemModal}
                         isOpen=${redeemOpen}
-                        onClose=${() => setRedeemOpen(false)}
+                        onClose=${() => { setRedeemOpen(false); setRedeemReason(null); }}
                         user=${user}
+                        reason=${redeemReason}
                     />
 
                     <!-- Feedback modal -->

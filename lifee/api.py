@@ -154,9 +154,51 @@ async def _get_balance(uid: str) -> int:
         return SIGNUP_CREDITS
 
 
-async def _deduct(uid: str, amount: int = 1) -> bool:
+async def _deduct(uid: str, amount: int = 1, reason: str = "chat") -> bool:
     from lifee import store as _s
-    return await asyncio.to_thread(_s.credits_debit, uid, amount, "chat")
+    return await asyncio.to_thread(_s.credits_debit, uid, amount, reason)
+
+
+async def _refund(uid: str, amount: int, reason: str) -> None:
+    """LLM 调用失败时退还预扣的 credits。失败静默（不掩盖原始异常）。"""
+    if amount <= 0:
+        return
+    from lifee import store as _s
+    try:
+        await asyncio.to_thread(_s.credits_credit, uid, amount, f"refund:{reason}")
+    except Exception as e:
+        print(f"[_refund] failed uid={uid} amount={amount} reason={reason}: {type(e).__name__}: {e}")
+
+
+async def _charge_or_response(request: Request, cost: int, reason: str):
+    """付费端点统一入口。
+    成功返回 (uid, None)；失败返回 (None, JSONResponse)。
+    使用：
+        uid, err = await _charge_or_response(request, 2, "path-options")
+        if err: return err
+        try:
+            ...
+        except Exception:
+            await _refund(uid, 2, "path-options")
+            raise
+    """
+    u = _current_user(request)
+    if not u:
+        return None, JSONResponse(
+            {"error": "unauthorized", "needsLogin": True},
+            status_code=401,
+        )
+    uid = f"user:{u['id']}"
+    if cost <= 0:
+        return uid, None
+    ok = await _deduct(uid, cost, reason)
+    if not ok:
+        bal = await _get_balance(uid)
+        return None, JSONResponse(
+            {"error": "insufficient_credits", "balance": bal, "needed": cost, "reason": reason},
+            status_code=402,
+        )
+    return uid, None
 
 
 async def _redeem(uid: str, code: str) -> tuple[bool, str]:
@@ -1206,7 +1248,7 @@ class SummarizeRequest(BaseModel):
 
 
 @app.post("/summarize")
-async def summarize_debate(req: SummarizeRequest):
+async def summarize_debate(req: SummarizeRequest, request: Request):
     """总结每个角色的核心观点"""
     # 优先从 Supabase 加载消息（避免大 POST body）
     msgs = req.messages
@@ -1220,6 +1262,10 @@ async def summarize_debate(req: SummarizeRequest):
 
     if not msgs:
         return {"summaries": {}}
+
+    uid, err = await _charge_or_response(request, 1, "summarize")
+    if err:
+        return err
 
     # 按角色分组
     by_persona = {}
@@ -1263,6 +1309,7 @@ Reply in JSON format: {{"persona_id": "1-2 sentence summary", ...}}"""
         summaries = _json.loads(text)
         return {"summaries": summaries}
     except Exception as e:
+        await _refund(uid, 1, "summarize")
         import traceback
         traceback.print_exc()
         return {"summaries": {}, "error": str(e)}
@@ -1285,9 +1332,12 @@ class PathOptionsRequest(BaseModel):
 
 
 @app.post("/path-options")
-async def generate_path_options(req: PathOptionsRequest):
+async def generate_path_options(req: PathOptionsRequest, request: Request):
     """从对话里推出 3-6 条用户可能的人生路径——每条只一句话，
     用作 roadmap 模式的起点选项。详细 plan 由前端再调 /plan-30-days。"""
+    uid, err = await _charge_or_response(request, 2, "path-options")
+    if err:
+        return err
     msgs = req.messages
     if req.sessionId and not msgs:
         try:
@@ -1351,9 +1401,11 @@ Make labels distinct and concrete (not "保守路线 / 激进路线" — use spe
                 continue
             paths.append({"id": f"p{i+1}", "label": label[:42], "summary": summary[:140]})
         if len(paths) < 2:
+            await _refund(uid, 2, "path-options")
             return {"paths": paths, "error": "too few paths"}
         return {"paths": paths}
     except Exception as e:
+        await _refund(uid, 2, "path-options")
         import traceback
         traceback.print_exc()
         return {"paths": [], "error": str(e)}
@@ -1369,9 +1421,17 @@ class SimulatePathRequest(BaseModel):
 
 
 @app.post("/simulate-path")
-async def simulate_path(req: SimulatePathRequest):
+async def simulate_path(req: SimulatePathRequest, request: Request):
     """假设用户走了 chosenPath（前面已经走过 parentChain），推 3 条紧接着会出现的新决策路径。
     用于 Roadmap 多层分叉。深度由前端控制——本端点不感知深度。"""
+    chosen = req.chosenPath or {}
+    if not (chosen.get("label") or "").strip():
+        return {"paths": [], "error": "missing chosenPath"}
+
+    uid, err = await _charge_or_response(request, 2, "simulate-path")
+    if err:
+        return err
+
     msgs = req.messages
     if req.sessionId and not msgs:
         try:
@@ -1389,11 +1449,8 @@ async def simulate_path(req: SimulatePathRequest):
             continue
         history.append(f"{pid}: {txt[:200]}")
 
-    chosen = req.chosenPath or {}
     chosen_label = (chosen.get("label") or "").strip()
     chosen_summary = (chosen.get("summary") or "").strip()
-    if not chosen_label:
-        return {"paths": [], "error": "missing chosenPath"}
 
     chain_lines = []
     for i, p in enumerate(req.parentChain or []):
@@ -1449,11 +1506,13 @@ Reply ONLY in this JSON format ({req.language}):
             text = text.split('```')[1].replace('json', '', 1).strip()
         data = _json.loads(text)
         if not isinstance(data, dict):
+            await _refund(uid, 2, "simulate-path")
             return {"paths": [], "error": "bad response shape"}
         outcome = (data.get("outcome") or "").strip()
         dilemma = (data.get("dilemma") or "").strip()
         raw_paths = data.get("paths")
         if not isinstance(raw_paths, list) or not raw_paths:
+            await _refund(uid, 2, "simulate-path")
             return {"paths": [], "outcome": outcome, "dilemma": dilemma, "error": "no paths returned"}
         paths = []
         for i, p in enumerate(raw_paths[:3]):
@@ -1465,9 +1524,11 @@ Reply ONLY in this JSON format ({req.language}):
                 continue
             paths.append({"id": f"sp{i+1}", "label": label[:42], "summary": summary[:140]})
         if len(paths) < 2:
+            await _refund(uid, 2, "simulate-path")
             return {"paths": paths, "outcome": outcome, "dilemma": dilemma, "error": "too few paths"}
         return {"paths": paths, "outcome": outcome[:400], "dilemma": dilemma[:300]}
     except Exception as e:
+        await _refund(uid, 2, "simulate-path")
         import traceback
         traceback.print_exc()
         return {"paths": [], "error": str(e)}
@@ -1570,8 +1631,11 @@ class PlanRequest(BaseModel):
 
 
 @app.post("/plan-30-days")
-async def plan_30_days(req: PlanRequest):
+async def plan_30_days(req: PlanRequest, request: Request):
     """生成前30天的周行动计划"""
+    uid, err = await _charge_or_response(request, 3, "plan-30-days")
+    if err:
+        return err
     msgs = req.messages
     if req.sessionId and not msgs:
         try:
@@ -1648,6 +1712,7 @@ Reply ONLY in this JSON format (no markdown, no extra text):
         plan = _json.loads(text)
         return {"plan": plan}
     except Exception as e:
+        await _refund(uid, 3, "plan-30-days")
         import traceback
         traceback.print_exc()
         return {"plan": {}, "error": str(e)}
@@ -1807,7 +1872,7 @@ async def _gemini_grounding_search(query: str) -> str:
 
 
 @app.post("/generate-personas")
-async def generate_new_personas(req: GeneratePersonasRequest):
+async def generate_new_personas(req: GeneratePersonasRequest, request: Request):
     """Use LLM (+ optional Tavily web search) to generate 1-2 brand-new persona definitions.
 
     These are distinct from the existing persona roster — the LLM picks real-world figures
@@ -1816,6 +1881,10 @@ async def generate_new_personas(req: GeneratePersonasRequest):
     """
     if not req.situation.strip():
         return {"personas": []}
+
+    uid, err = await _charge_or_response(request, 3, "generate-personas")
+    if err:
+        return err
 
     # 复用对话里的 web_search tool（gemini-2.5-flash + googleSearch grounding）
     search_ctx = ""
@@ -1942,8 +2011,11 @@ async def generate_new_personas(req: GeneratePersonasRequest):
                 if isinstance(thumb, str) and thumb:
                     p["cover_url"] = thumb
 
+        if not valid:
+            await _refund(uid, 3, "generate-personas")
         return {"personas": valid}
     except Exception as e:
+        await _refund(uid, 3, "generate-personas")
         import traceback; traceback.print_exc()
         return {"personas": [], "error": str(e)}
 
@@ -2042,11 +2114,14 @@ async def extract_memory(req: ExtractMemoryRequest):
 # ---- Followup API ----
 
 @app.post("/followup")
-async def generate_followup_endpoint(req: FollowupRequest):
+async def generate_followup_endpoint(req: FollowupRequest, request: Request):
     """Generate a single round of structured follow-up questions without touching
     session / persona-streaming infra. Used by the home-page popup flow that
     gathers context before the chat view opens.
     """
+    uid, err = await _charge_or_response(request, 1, "followup")
+    if err:
+        return err
     from lifee.debate.moderator import generate_followup as _gen
     lines = []
     for m in (req.history or []):
@@ -2066,8 +2141,15 @@ async def generate_followup_endpoint(req: FollowupRequest):
     try:
         provider = _get_provider()
     except Exception as e:
+        await _refund(uid, 1, "followup")
         return {"data": None, "error": f"provider unavailable: {e}"}
-    data = await _gen(provider, names, transcript)
+    try:
+        data = await _gen(provider, names, transcript)
+    except Exception as e:
+        await _refund(uid, 1, "followup")
+        return {"data": None, "error": str(e)}
+    if data is None:
+        await _refund(uid, 1, "followup")
     return {"data": data}
 
 
@@ -2112,8 +2194,9 @@ async def _handle_decision(req: DecisionRequest, request: Request):
     uid = f"user:{req.userId}"
 
     speakers = len(req.personas)
+    per_msg_cost = 2 if req.webSearch else 1
     balance = await _get_balance(uid)
-    if balance < speakers:
+    if balance < speakers * per_msg_cost:
         return {
             "messages": [{"personaId": "system", "text": "余额不足，请充值后继续。"}],
             "options": [],
@@ -2280,9 +2363,11 @@ async def _handle_decision(req: DecisionRequest, request: Request):
             if user_text and chat_user_id:
                 seq += 1
                 await _save_message(sid, chat_user_id, "user", user_text, seq=seq)
+            _per_msg_cost = 2 if req.webSearch else 1
+            _per_msg_reason = "chat-web" if req.webSearch else "chat"
             for msg in messages:
                 if msg.get("personaId") not in ("system", "moderator") and msg.get("text", "").strip():
-                    await _deduct(uid)
+                    await _deduct(uid, _per_msg_cost, _per_msg_reason)
                     if chat_user_id:
                         seq += 1
                         await _save_message(sid, chat_user_id, "assistant", msg["text"], persona_id=msg["personaId"], seq=seq)
@@ -2358,12 +2443,15 @@ async def _stream_sse(moderator, participants, question, mod_module=None, origin
           # avoid "Task was destroyed but pending" warnings
           t.add_done_callback(lambda _t: _t.exception() if not _t.cancelled() else None)
 
+      _per_msg_cost = 2 if req.webSearch else 1
+      _per_msg_reason = "chat-web" if req.webSearch else "chat"
+
       async def _finalize_current():
           nonlocal has_content, current_text
           if not current_pid:
               return
           if has_content:
-              _bg(_deduct(uid))
+              _bg(_deduct(uid, _per_msg_cost, _per_msg_reason))
               _bg(_log_conversation(uid, "assistant", current_pid, current_text.strip()))
               if chat_user_id and current_seq:
                   _bg(_patch_message_content(session_id, current_seq, current_text.strip()))
