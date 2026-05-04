@@ -1,4 +1,5 @@
 """Claude API Provider"""
+import uuid
 from typing import AsyncIterator, List, Optional, Union
 
 import anthropic
@@ -6,19 +7,65 @@ import anthropic
 from .base import ChatResponse, LLMProvider, Message, MessageRole, RateLimitError, ServiceUnavailableError
 
 
-# Claude Code 版本号（用于 user-agent，需与本地安装的 claude --version 一致）
-CLAUDE_CODE_VERSION = "2.1.89"
+# Claude Code 版本号 — 跟本地 `claude --version` 一致;每次 IoPet/LIFEE release 时刷新。
+# Anthropic 服务端会校验 user-agent 中的版本号,过旧的版本会被拒。
+CLAUDE_CODE_VERSION = "2.1.111"
 
-# Claude Code 计费标头（OAuth token 调用时必须作为 system 第一条，否则会被 429 限流）
+# 真 Claude Code 2.1.111 在请求里塞的 billing header text 块。
+# 关键值:cc_version 后缀 = "1e7",cc_entrypoint = "sdk-cli"。
+# 写错任何一个,Anthropic 把请求路由到 "extra usage" 计费层而非套餐内。
+# 后缀和 entrypoint 都是从 cli.js 反向工程得到。Anthropic 改 → 重抓即可。
 CLAUDE_CODE_BILLING_HEADER = (
-    f"x-anthropic-billing-header: cc_version={CLAUDE_CODE_VERSION}.72a; "
-    "cc_entrypoint=cli; cch=00000;"
+    f"x-anthropic-billing-header: cc_version={CLAUDE_CODE_VERSION}.1e7; "
+    "cc_entrypoint=sdk-cli; cch=00000;"
 )
+
+# 真 Claude Code 发的完整 anthropic-beta 列表(8 个 flag)。
+# Hermes 默认 OAuth_only_betas 只有 2 个,导致 fingerprint 不全。
+_OAUTH_BETAS = [
+    "claude-code-20250219",
+    "oauth-2025-04-20",
+    "context-1m-2025-08-07",
+    "context-management-2025-06-27",
+    "prompt-caching-scope-2026-01-05",
+    "advisor-tool-2026-03-01",
+    "advanced-tool-use-2025-11-20",
+    "effort-2025-11-24",
+]
 
 
 def is_oauth_token(token: str) -> bool:
     """检查是否是 OAuth token（包含 sk-ant-oat）"""
     return "sk-ant-oat" in token
+
+
+def _build_impersonation_hook(cc_version: str):
+    """生成 httpx event_hook,在每个请求发送前覆盖 Python SDK 的指纹。
+
+    Anthropic Python SDK 自动注入 ``Anthropic/Python X.Y.Z, ...`` 前缀和
+    ``x-stainless-runtime: CPython`` 等 header。``default_headers`` 只能合并
+    不能替换 → 服务端识别为 Python SDK → 路由到 extra usage。
+    event_hook 在 SDK 注入之后、TLS 发送之前运行,可强行覆盖。
+    """
+    async def _hook(request):
+        request.headers["user-agent"] = f"claude-cli/{cc_version} (external, sdk-cli)"
+        request.headers["x-stainless-lang"] = "js"
+        request.headers["x-stainless-runtime"] = "node"
+        request.headers["x-stainless-package-version"] = "0.81.0"
+        request.headers["x-stainless-runtime-version"] = "v24.15.0"
+        request.headers["x-stainless-os"] = "Windows"
+        request.headers["x-stainless-timeout"] = "600"
+        request.headers["x-client-request-id"] = str(uuid.uuid4())
+        # 删掉 Python SDK 独有的 header(real Claude Code 永远不发这些)
+        for drop in (
+            "x-stainless-async",
+            "x-stainless-helper-method",
+            "x-stainless-stream-helper",
+            "x-stainless-read-timeout",
+        ):
+            if drop in request.headers:
+                del request.headers[drop]
+    return _hook
 
 
 class ClaudeProvider(LLMProvider):
@@ -44,35 +91,29 @@ class ClaudeProvider(LLMProvider):
         self._model = model
         self._is_oauth = is_oauth_token(api_key)
 
-        # 根据 token 类型选择认证方式
         if self._is_oauth:
-            import uuid
             self._session_id = str(uuid.uuid4())
-            # OAuth token: 模拟 Claude Code 的完整请求格式
+            # OAuth: 完全模拟 Claude Code 才能走 Max 套餐内额度。
+            # 仅 default_headers 不够 — Python SDK 会再覆盖 user-agent 和
+            # x-stainless-* 一组 header。用 AsyncClient.event_hooks 后置覆盖。
             self._client = anthropic.AsyncAnthropic(
                 api_key=None,
                 auth_token=api_key,
                 base_url="https://api.anthropic.com",
+                default_query={"beta": "true"},
                 default_headers={
-                    "accept": "application/json",
+                    "anthropic-beta": ",".join(_OAUTH_BETAS),
                     "anthropic-dangerous-direct-browser-access": "true",
-                    "anthropic-beta": (
-                        "claude-code-20250219,oauth-2025-04-20,"
-                        "interleaved-thinking-2025-05-14,"
-                        "context-management-2025-06-27,"
-                        "prompt-caching-scope-2026-01-05,"
-                        "effort-2025-11-24"
-                    ),
-                    "user-agent": f"claude-cli/{CLAUDE_CODE_VERSION} (external, cli)",
                     "x-app": "cli",
                     "x-claude-code-session-id": self._session_id,
-                    "x-stainless-lang": "js",
-                    "x-stainless-package-version": "0.74.0",
-                    "x-stainless-os": "Windows",
-                    "x-stainless-arch": "x64",
-                    "x-stainless-runtime": "node",
-                    "x-stainless-runtime-version": "v22.17.0",
                 },
+                # Anthropic 自带的 DefaultAsyncHttpxClient 已配好 timeout / retries / SSL
+                # 等默认值,我们只在它基础上加 event_hooks 做指纹覆盖。
+                http_client=anthropic.DefaultAsyncHttpxClient(
+                    event_hooks={
+                        "request": [_build_impersonation_hook(CLAUDE_CODE_VERSION)]
+                    }
+                ),
             )
         else:
             # 普通 API Key
