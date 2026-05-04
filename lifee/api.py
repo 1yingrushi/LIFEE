@@ -1535,8 +1535,11 @@ Reply ONLY in this JSON format ({req.language}):
 
 
 @app.post("/timeline")
-async def generate_timeline(req: TimelineRequest):
+async def generate_timeline(req: TimelineRequest, request: Request):
     """为A/B辩论生成两条人生时间线"""
+    uid, err = await _charge_or_response(request, 3, "timeline")
+    if err:
+        return err
     msgs = req.messages
     if req.sessionId and not msgs:
         try:
@@ -1613,8 +1616,11 @@ Reply ONLY in this JSON format (no markdown, no extra text):
         if '```' in text:
             text = text.split('```')[1].replace('json', '', 1).strip()
         timelines = _json.loads(text)
+        if not timelines or not isinstance(timelines, dict) or not (timelines.get("option_a") or timelines.get("option_b")):
+            await _refund(uid, 3, "timeline")
         return {"timelines": timelines}
     except Exception as e:
+        await _refund(uid, 3, "timeline")
         import traceback
         traceback.print_exc()
         return {"timelines": {}, "error": str(e)}
