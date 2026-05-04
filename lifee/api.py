@@ -1315,15 +1315,6 @@ Reply in JSON format: {{"persona_id": "1-2 sentence summary", ...}}"""
         return {"summaries": {}, "error": str(e)}
 
 
-# ---- Timeline API ----
-
-class TimelineRequest(BaseModel):
-    sessionId: str = ""
-    messages: list = []
-    language: str = "Chinese"
-    situation: str = ""
-
-
 class PathOptionsRequest(BaseModel):
     sessionId: str = ""
     messages: list = []
@@ -1532,98 +1523,6 @@ Reply ONLY in this JSON format ({req.language}):
         import traceback
         traceback.print_exc()
         return {"paths": [], "error": str(e)}
-
-
-@app.post("/timeline")
-async def generate_timeline(req: TimelineRequest, request: Request):
-    """为A/B辩论生成两条人生时间线"""
-    uid, err = await _charge_or_response(request, 3, "timeline")
-    if err:
-        return err
-    msgs = req.messages
-    if req.sessionId and not msgs:
-        try:
-            from lifee import store as _s
-            db_msgs = await asyncio.to_thread(_s.msg_list, req.sessionId)
-            msgs = [{"personaId": m.get("persona_id") or "", "text": m.get("content", "")} for m in db_msgs]
-        except Exception:
-            pass
-
-    if not msgs:
-        return {"timelines": {}}
-
-    by_persona: dict = {}
-    for m in msgs:
-        pid = m.get("personaId", "")
-        if pid in ("user", "system", "lifee-followup", "moderator", ""):
-            continue
-        if pid not in by_persona:
-            by_persona[pid] = []
-        by_persona[pid].append(m.get("text", ""))
-
-    situation = req.situation.strip()
-    personas_list = list(by_persona.keys())
-    if len(personas_list) < 1:
-        return {"timelines": {}}
-
-    parts = []
-    for pid, texts in by_persona.items():
-        combined = "\n".join(texts[-4:])
-        parts.append(f"【{pid}的观点】:\n{combined}")
-
-    prompt = f"""You are a life strategy advisor. Based on this debate about a key life decision, generate 2 concrete future timelines — one for each path/option being debated.
-
-Situation: {situation or 'Major life decision'}
-
-Debate content:
-{chr(10).join(parts)}
-
-Generate exactly 2 timelines in {req.language}. Each timeline should have 4-5 phases spanning 3 years.
-
-Reply ONLY in this JSON format (no markdown, no extra text):
-{{
-  "option_a": {{
-    "label": "Short path name (e.g. 加入公司)",
-    "phases": [
-      {{"period": "Now → Month 3", "title": "Phase title", "description": "Concrete description of what happens", "tags": ["tag1", "tag2"]}},
-      {{"period": "Month 3 → 6", "title": "Phase title", "description": "...", "tags": ["tag1"]}},
-      {{"period": "Month 6 → 12", "title": "Phase title", "description": "...", "tags": ["tag1", "tag2"]}},
-      {{"period": "Year 1 → 2", "title": "Phase title", "description": "...", "tags": ["tag1"]}},
-      {{"period": "Year 2 → 3", "title": "Phase title", "description": "...", "tags": ["tag1", "tag2"]}}
-    ]
-  }},
-  "option_b": {{
-    "label": "Short path name (e.g. 自主创业)",
-    "phases": [
-      {{"period": "Now → Month 3", "title": "Phase title", "description": "...", "tags": ["tag1"]}},
-      {{"period": "Month 3 → 6", "title": "Phase title", "description": "...", "tags": ["tag1"]}},
-      {{"period": "Month 6 → 12", "title": "Phase title", "description": "...", "tags": ["tag1", "tag2"]}},
-      {{"period": "Year 1 → 2", "title": "Phase title", "description": "...", "tags": ["tag1"]}},
-      {{"period": "Year 2 → 3", "title": "Phase title", "description": "...", "tags": ["tag1", "tag2"]}}
-    ]
-  }}
-}}"""
-
-    try:
-        provider = _get_provider()
-        from lifee.providers.base import Message, MessageRole
-        messages_llm = [Message(role=MessageRole.USER, content=prompt)]
-        chunks = []
-        async for chunk in provider.stream(messages=messages_llm, max_tokens=1200, temperature=0.4):
-            chunks.append(chunk)
-        text = "".join(chunks).strip()
-        import json as _json
-        if '```' in text:
-            text = text.split('```')[1].replace('json', '', 1).strip()
-        timelines = _json.loads(text)
-        if not timelines or not isinstance(timelines, dict) or not (timelines.get("option_a") or timelines.get("option_b")):
-            await _refund(uid, 3, "timeline")
-        return {"timelines": timelines}
-    except Exception as e:
-        await _refund(uid, 3, "timeline")
-        import traceback
-        traceback.print_exc()
-        return {"timelines": {}, "error": str(e)}
 
 
 # ---- 30-Day Plan API ----

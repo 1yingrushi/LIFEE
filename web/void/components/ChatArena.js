@@ -492,32 +492,6 @@
         const [planData, setPlanData]         = useState(null);
         const [planLoading, setPlanLoading]   = useState(false);
         const [planWeek, setPlanWeek]         = useState(0);
-        // Timeline 模式：对一条 path 和它的兄弟生成 A/B 长期时间线对比
-        // timelineNodes: 5×2=10 个 phase nodes，分 branch 'A' 'B'
-        const [timelineMode, setTimelineMode]               = useState(false);
-        const [timelineNodes, setTimelineNodes]             = useState([]);
-        const [timelineBranchLabels, setTimelineBranchLabels] = useState({ A: '', B: '' });
-        const [timelineLoading, setTimelineLoading]         = useState(false);
-        const [timelineError, setTimelineError]             = useState('');
-        // Timeline cache：按 sessionId + A/B label 索引，刷新后命中不再扣费
-        const _timelineKey = (sid, a, b) => `${sid || ''}::${(a || '').trim()}::${(b || '').trim()}`;
-        const loadTimelineStore = () => {
-            try { return JSON.parse(window.localStorage.getItem('lifee_timeline_store') || '{}') || {}; }
-            catch (_) { return {}; }
-        };
-        const getTimelineCache = (sid, a, b) => {
-            if (!sid) return null;
-            const store = loadTimelineStore();
-            return store[_timelineKey(sid, a, b)] || null;
-        };
-        const saveTimelineCache = (sid, a, b, payload) => {
-            if (!sid) return;
-            try {
-                const store = loadTimelineStore();
-                store[_timelineKey(sid, a, b)] = payload;
-                window.localStorage.setItem('lifee_timeline_store', JSON.stringify(store));
-            } catch (_) {}
-        };
         const [showMoreMenu, setShowMoreMenu]   = useState(false);
         const [showToolsMenu, setShowToolsMenu] = useState(false);
         const [showVoiceMap, setShowVoiceMap]   = useState(false);
@@ -539,7 +513,7 @@
                 window.localStorage.setItem('lifee_voice_map_view', JSON.stringify({ pan: vmPan, scale: vmScale, cardPos: vmCardPos }));
             } catch (_) {}
         }, [vmPan, vmScale, vmCardPos]);
-        // 给新出现的 persona 卡 / __user / timeline 卡填默认槽位（之前是 useState 初始化里做的）。
+        // 给新出现的 persona 卡 / __user 卡填默认槽位（之前是 useState 初始化里做的）。
         useEffect(() => {
             const personas = selectedPersonas || [];
             setVmCardPos(prev => {
@@ -557,8 +531,6 @@
                     out['__user'] = { x: userSlot.x, y: userSlot.y, rotate: userSlot.rotate };
                     changed = true;
                 }
-                if (!out['__timeline_a']) { out['__timeline_a'] = { x: 18,  y: 660 }; changed = true; }
-                if (!out['__timeline_b']) { out['__timeline_b'] = { x: 296, y: 660 }; changed = true; }
                 return changed ? out : prev;
             });
         }, [(selectedPersonas || []).map(p => p.id).join(',')]);
@@ -1488,100 +1460,6 @@
             setShowVoiceMap(false);
             // 用 setTimeout 让 sidebar 关闭动画先开始，再触发流式输出
             setTimeout(() => { runRound(msg); }, 50);
-        };
-
-        // Timeline：以一条 path 作为 A，自动取它的同层兄弟作为 B（没有兄弟就用 fallback），
-        // 调 /timeline 拿两条 5-阶段对比时间线。结果缓存在 localStorage，刷新可复用不再扣费。
-        const generateTimeline = async (sourcePath) => {
-            if (timelineLoading) return;
-            if (!sourcePath?.label) return;
-            const labelA = (sourcePath.label || '').trim();
-            const sibs = pathOptions.filter(x =>
-                x.kind === 'path' && x.parentId === sourcePath.parentId && x.id !== sourcePath.id
-            );
-            const fallbackB = sibs[0] || null;
-            const labelB = (fallbackB?.label || '').trim();
-            if (!labelB) {
-                setTimelineError(t('chat.timelineNeedsSibling') || 'Timeline 需要至少两条 path 才能对比。');
-                setTimeout(() => setTimelineError(''), 4000);
-                return;
-            }
-            const sid = sessionIdRef.current || sessionId;
-            const labels = { A: labelA, B: labelB };
-            // 缓存命中：直接显示，不扣费
-            const cached = getTimelineCache(sid, labelA, labelB);
-            if (cached?.nodes?.length) {
-                setTimelineBranchLabels(cached.labels || labels);
-                setTimelineNodes(cached.nodes);
-                setTimelineMode(true);
-                setShowVoiceMap(true);
-                return;
-            }
-            setTimelineLoading(true);
-            setTimelineError('');
-            setTimelineBranchLabels(labels);
-            setTimelineNodes([]);
-            setTimelineMode(true);
-            setShowVoiceMap(true);
-            try {
-                const payload = JSON.stringify({
-                    messages: [
-                        { personaId: 'option_a', text: `Path A: ${labelA}\n${sourcePath.summary || ''}` },
-                        { personaId: 'option_b', text: `Path B: ${labelB}\n${fallbackB.summary || ''}` },
-                    ],
-                    language: language || 'Chinese',
-                    situation: `${context?.situation || 'Major life decision'}\n\nGenerate two possible life paths after this decision.`,
-                });
-                const r = await window.fetch('/timeline', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: payload,
-                });
-                if (r.status === 402) {
-                    const data = await r.json().catch(() => ({}));
-                    window.__lifeeMaybe402?.(data);
-                    setTimelineMode(false);
-                    return;
-                }
-                if (!r.ok) throw new Error(`Server ${r.status}`);
-                const res = await r.json();
-                window.__lifeeRefreshBalance?.();
-                if (res?.error) throw new Error(res.error);
-                const tl = res?.timelines || res;
-                const optA = tl?.option_a || {};
-                const optB = tl?.option_b || {};
-                const stamp = Date.now();
-                const finalLabels = {
-                    A: (optA.label || labelA).trim(),
-                    B: (optB.label || labelB).trim(),
-                };
-                const nodes = [
-                    ...(optA.phases || []).map((phase, i) => ({
-                        id: `tl-a-${stamp}-${i}`, branch: 'A',
-                        period: phase.period || `A · ${i + 1}`,
-                        title: phase.title || finalLabels.A,
-                        description: phase.description || '',
-                        tags: Array.isArray(phase.tags) ? phase.tags.slice(0, 3) : [],
-                    })),
-                    ...(optB.phases || []).map((phase, i) => ({
-                        id: `tl-b-${stamp}-${i}`, branch: 'B',
-                        period: phase.period || `B · ${i + 1}`,
-                        title: phase.title || finalLabels.B,
-                        description: phase.description || '',
-                        tags: Array.isArray(phase.tags) ? phase.tags.slice(0, 3) : [],
-                    })),
-                ];
-                if (!nodes.length) throw new Error('No timeline phases returned');
-                setTimelineBranchLabels(finalLabels);
-                setTimelineNodes(nodes);
-                saveTimelineCache(sid, labelA, labelB, { labels: finalLabels, nodes });
-            } catch (e) {
-                setTimelineError(e?.message || 'Timeline failed');
-                setTimeout(() => setTimelineError(''), 4000);
-            } finally {
-                setTimelineLoading(false);
-            }
         };
 
         const generatePlan = async (chosenOption = '') => {
@@ -2756,15 +2634,6 @@
                                                             title=${isWalked ? 'Re-simulate consequences from this path · 2 credits' : 'Simulate consequences if you walked this path · 2 credits'}
                                                         >${isSimulating ? '…' : (isWalked ? `Re-walk 2${t('credit.suffix')}` : `Walk 2${t('credit.suffix')}`)}</button>
                                                     ` : null}
-                                                    ${pathOptions.filter(x => x.kind === 'path' && x.parentId === p.parentId).length >= 2 ? html`
-                                                        <button
-                                                            onMouseDown=${(e) => e.stopPropagation()}
-                                                            onClick=${() => generateTimeline(p)}
-                                                            disabled=${timelineLoading}
-                                                            class=${`no-shine text-[7px] font-black uppercase tracking-[0.08em] px-1.5 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
-                                                            title="Compare this path with a sibling as A/B 3-year timelines · 3 credits"
-                                                        >${timelineLoading ? '…' : `TL 3${t('credit.suffix')}`}</button>
-                                                    ` : null}
                                                     <button
                                                         onMouseDown=${(e) => e.stopPropagation()}
                                                         onClick=${() => generatePlan(p.label || '')}
@@ -2801,71 +2670,6 @@
                                 `;
                             })() : null}
 
-                            <!-- ── Timeline 模式：A/B 两张 5-阶段对比卡 ── -->
-                            ${timelineMode ? ['A', 'B'].map((branch, ki) => {
-                                const branchNodes = timelineNodes.filter(n => n.branch === branch);
-                                const branchLabel = (timelineBranchLabels[branch] || '').trim();
-                                const cardId = ki === 0 ? '__timeline_a' : '__timeline_b';
-                                const userPosL = cardPos['__user'] || { x: 0, y: 0 };
-                                const fallback = ki === 0
-                                    ? { x: userPosL.x + 360, y: userPosL.y + 380 }
-                                    : { x: userPosL.x + 660, y: userPosL.y + 380 };
-                                const pos = cardPos[cardId] || fallback;
-                                const palette = ki === 0
-                                    ? { accent: 'text-primary', accentBg: 'bg-primary/10', accentBdr: 'border-primary/40', dot: 'bg-primary' }
-                                    : { accent: 'text-secondary', accentBg: 'bg-secondary/10', accentBdr: 'border-secondary/40', dot: 'bg-secondary' };
-                                return html`
-                                    <div
-                                        key=${cardId}
-                                        class="absolute w-[280px] cursor-grab active:cursor-grabbing select-none"
-                                        style=${{ left: pos.x + 'px', top: pos.y + 'px' }}
-                                        onMouseDown=${(e) => startCardDrag(e, cardId)}
-                                    >
-                                        <div class=${'voicemap-card voicemap-card-bg rounded-[20px] border ' + palette.accentBdr + ' overflow-hidden'}>
-                                            <div class=${'px-4 py-2.5 border-b border-outline/15 flex items-center justify-between gap-2 ' + palette.accentBg}>
-                                                <span class=${'text-[8px] font-black uppercase tracking-[0.28em] ' + palette.accent + ' truncate'}>
-                                                    ${branchLabel ? `${branch}. ${branchLabel}` : `Option ${branch}`}
-                                                </span>
-                                                ${ki === 0 ? html`
-                                                    <button
-                                                        onMouseDown=${(e) => e.stopPropagation()}
-                                                        onClick=${() => { setTimelineMode(false); setTimelineNodes([]); }}
-                                                        class="no-shine text-[8px] uppercase tracking-wider text-on-surface-variant/50 hover:text-on-surface px-1.5"
-                                                        title="Close timeline"
-                                                    >✕</button>
-                                                ` : null}
-                                            </div>
-                                            <div class="px-4 py-3">
-                                                ${branchNodes.length === 0 ? html`
-                                                    <div class="py-3 text-[10px] italic text-on-surface-variant/50 text-center">
-                                                        ${timelineLoading ? (t('chat.timelineGenerating') || 'Generating…') : (t('chat.timelineEmpty') || '(empty)')}
-                                                    </div>
-                                                ` : null}
-                                                ${branchNodes.map((phase, pi) => html`
-                                                    <div key=${phase.id} class="flex gap-3 py-2 ${pi < branchNodes.length - 1 ? 'border-b border-outline/10' : ''}">
-                                                        <div class="flex flex-col items-center pt-1 shrink-0">
-                                                            <div class=${'w-[7px] h-[7px] rounded-full ' + (pi === 0 ? palette.dot : 'bg-outline/40') + ' border ' + palette.accentBdr}></div>
-                                                            ${pi < branchNodes.length - 1 ? html`<div class="w-px flex-1 bg-outline/20 mt-1"></div>` : null}
-                                                        </div>
-                                                        <div class="min-w-0 flex-1">
-                                                            <div class=${'text-[8px] font-bold uppercase tracking-[0.15em] ' + palette.accent + '/70 mb-0.5'}>${phase.period}</div>
-                                                            <div class="text-[11px] font-black text-on-surface leading-snug mb-1">${phase.title}</div>
-                                                            <div class="text-[10px] text-on-surface-variant/65 leading-relaxed mb-1.5">${phase.description}</div>
-                                                            ${(phase.tags || []).length > 0 ? html`
-                                                                <div class="flex flex-wrap gap-1">
-                                                                    ${(phase.tags || []).map((tg, ti) => html`
-                                                                        <span key=${ti} class="text-[8px] px-1.5 py-0.5 rounded-full bg-surface-container-high/60 text-on-surface-variant/70 font-bold">${tg}</span>
-                                                                    `)}
-                                                                </div>
-                                                            ` : null}
-                                                        </div>
-                                                    </div>
-                                                `)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                `;
-                            }) : null}
                         </div>
                     </div>
                 </aside>
@@ -3449,13 +3253,6 @@
                     </div>
                 ` : null}
 
-                <!-- ── Timeline error toast ── -->
-                ${timelineError ? html`
-                    <div class="fixed top-24 right-4 z-50 text-xs text-rose-300 bg-rose-900/80 border border-rose-500/30 px-4 py-3 rounded-2xl shadow-lg backdrop-blur-md">
-                        Timeline: ${timelineError}
-                        <button onClick=${() => setTimelineError('')} class="ml-2 opacity-50 hover:opacity-100">✕</button>
-                    </div>
-                ` : null}
 
                 <!-- ── 30-Day Plan modal ── -->
                 ${showPlanModal ? html`
