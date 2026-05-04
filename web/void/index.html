@@ -813,6 +813,15 @@
             'auth.noAccount':    { en: 'No account?',    zh: '没有账户？' },
             'auth.signUp':       { en: 'Sign up',        zh: '注册' },
             'auth.haveAccount':  { en: 'Already have one?', zh: '已有账户？' },
+            'auth.terms.check':  { en: 'I have read and agree to the ', zh: '我已阅读并同意 ' },
+            'auth.terms.link':   { en: 'Terms of Service', zh: '用户协议' },
+            'auth.terms.title':  { en: 'Welcome to LIFEE', zh: '欢迎使用 LIFEE' },
+            'auth.terms.sub':    { en: 'Before you begin, please read the following:', zh: '在开始之前，请了解以下内容：' },
+            'auth.terms.body':   {
+                en: `LIFEE is an AI-assisted decision-making product. Our persona system is built from publicly available historical records, public statements, and our own curated content. It does not represent the official positions of any real individuals.\n\nBy using LIFEE, you agree that:\n• Content provided by the product is for reference only and does not constitute professional advice (legal, medical, financial, etc.).\n• You are responsible for your own decisions. LIFEE's persona debates are a tool for assisted thinking, not answers.\n• Your conversation content may be used to improve the product experience. We commit to never selling your personal data to third parties.\n• You are at least 16 years of age.`,
+                zh: `LIFEE 是一个 AI 辅助决策产品。我们的角色系统基于公开的历史资料、人物公开言论及我们自行整理的内容构建，不代表任何真实人物的官方立场。\n\n使用 LIFEE 即表示你同意：\n• 产品提供的内容仅供参考，不构成专业建议（法律、医疗、财务等）。\n• 你对自己的决策负责，LIFEE 的角色辩论是辅助思考的工具，不是答案。\n• 你的对话内容将用于改善产品体验，我们承诺不向第三方出售你的个人数据。\n• 你已年满 16 周岁。`
+            },
+            'auth.terms.close':  { en: 'Close', zh: '关闭' },
 
             // Help FAQ
             'help.title':        { en: 'Help & FAQ',     zh: '帮助中心' },
@@ -1259,6 +1268,8 @@
             // Turnstile 已移除：humanVerified 默认 true，跳过验证码 UI 直接进入
             // 邮箱/密码表单。下面那个 widget useEffect 因为 humanVerified=true 早退出。
             const [humanVerified, setHumanVerified] = useState(true);
+            const [termsAccepted, setTermsAccepted] = useState(false);
+            const [showTerms, setShowTerms] = useState(false);
             const turnstileRef = useRef(null);
             const widgetIdRef = useRef(null);
 
@@ -1272,6 +1283,8 @@
                     setMessage('');
                     setLoading(false);
                     setResendCooldown(0);
+                    setTermsAccepted(false);
+                    setShowTerms(false);
                 }
             }, [isOpen]);
 
@@ -1391,7 +1404,7 @@
                                         />
                                         <button
                                             onClick=${handleSendCode}
-                                            disabled=${loading || !email || !password || resendCooldown > 0}
+                                            disabled=${loading || !email || !password || resendCooldown > 0 || !termsAccepted}
                                             class="shrink-0 px-3 rounded-xl btn-ghost text-xs whitespace-nowrap disabled:opacity-40"
                                         >${resendCooldown > 0
                                             ? t('auth.resendIn').replace('{s}', resendCooldown)
@@ -1424,10 +1437,28 @@
                                         class="w-full bg-surface-container border border-outline/30 text-on-surface rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 void-textarea"
                                     />
                                 ` : null}
+                                ${mode === 'signup' && html`
+                                    <label class="flex items-start gap-2.5 cursor-pointer select-none pt-1">
+                                        <input
+                                            type="checkbox"
+                                            checked=${termsAccepted}
+                                            onChange=${e => setTermsAccepted(e.target.checked)}
+                                            class="mt-0.5 shrink-0 accent-primary w-4 h-4 rounded"
+                                        />
+                                        <span class="text-xs text-on-surface-variant leading-relaxed">
+                                            ${t('auth.terms.check')}
+                                            <button
+                                                type="button"
+                                                onClick=${e => { e.preventDefault(); setShowTerms(true); }}
+                                                class="text-primary hover:underline"
+                                            >${t('auth.terms.link')}</button>
+                                        </span>
+                                    </label>
+                                `}
                                 ${message && html`<p class="text-xs text-tertiary/80">${message}</p>`}
                                 <button
                                     onClick=${handleAuth}
-                                    disabled=${loading || !email || !password || (mode === 'signup' && !otpCode)}
+                                    disabled=${loading || !email || !password || (mode === 'signup' && (!otpCode || !termsAccepted))}
                                     class="w-full btn-gradient rounded-xl py-3 text-sm disabled:opacity-40"
                                 >${loading
                                     ? t('auth.pleaseWait')
@@ -1441,6 +1472,25 @@
                         `}
                     </div>
                 </div>
+
+                ${showTerms && html`
+                    <div class="fixed inset-0 z-[60] flex items-center justify-center">
+                        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick=${() => setShowTerms(false)}></div>
+                        <div class="relative w-full max-w-md mx-4 glass-card rounded-3xl p-7 animate-in iridescent-border max-h-[80vh] flex flex-col">
+                            <div class="mb-4">
+                                <h3 class="font-headline text-base font-bold text-on-surface">${t('auth.terms.title')}</h3>
+                                <p class="text-xs text-on-surface-variant mt-1">${t('auth.terms.sub')}</p>
+                            </div>
+                            <div class="overflow-y-auto flex-1 text-sm text-on-surface-variant leading-relaxed whitespace-pre-line pr-1">
+                                ${t('auth.terms.body')}
+                            </div>
+                            <button
+                                onClick=${() => setShowTerms(false)}
+                                class="mt-5 w-full btn-gradient rounded-xl py-2.5 text-sm"
+                            >${t('auth.terms.close')}</button>
+                        </div>
+                    </div>
+                `}
             `;
         }
 
