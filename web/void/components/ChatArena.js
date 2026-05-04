@@ -2744,34 +2744,34 @@
                                         onMouseDown=${(e) => startCardDrag(e, id)}
                                     >
                                         <div class=${'voicemap-card voicemap-card-bg rounded-[20px] border overflow-hidden ' + (isWalked ? 'border-primary/40 ring-1 ring-primary/20' : 'border-outline/15')}>
-                                            <div class=${`px-4 py-2.5 border-b border-outline/15 flex items-center justify-between gap-2 ${c.bg}`}>
-                                                <span class=${`text-[8px] font-black uppercase tracking-[0.28em] ${c.text} truncate`}>${pathLabel}</span>
-                                                <div class="flex items-center gap-1 shrink-0">
+                                            <div class=${`px-3 py-2 border-b border-outline/15 flex flex-wrap items-center justify-between gap-1.5 ${c.bg}`}>
+                                                <span class=${`text-[8px] font-black uppercase tracking-[0.28em] ${c.text} truncate min-w-0`}>${pathLabel}</span>
+                                                <div class="flex flex-wrap items-center gap-1 justify-end">
                                                     ${canWalk ? html`
                                                         <button
                                                             onMouseDown=${(e) => e.stopPropagation()}
                                                             onClick=${() => simulatePath(p)}
                                                             disabled=${isSimulating}
-                                                            class=${`no-shine text-[7px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
-                                                            title=${isWalked ? 'Re-simulate consequences from this path' : 'Simulate consequences if you walked this path'}
-                                                        >${isSimulating ? '…' : (isWalked ? `Re-walk · 2${t('credit.suffix')}` : `Walk · 2${t('credit.suffix')} →`)}</button>
+                                                            class=${`no-shine text-[7px] font-black uppercase tracking-[0.08em] px-1.5 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
+                                                            title=${isWalked ? 'Re-simulate consequences from this path · 2 credits' : 'Simulate consequences if you walked this path · 2 credits'}
+                                                        >${isSimulating ? '…' : (isWalked ? `Re-walk 2${t('credit.suffix')}` : `Walk 2${t('credit.suffix')}`)}</button>
                                                     ` : null}
                                                     ${pathOptions.filter(x => x.kind === 'path' && x.parentId === p.parentId).length >= 2 ? html`
                                                         <button
                                                             onMouseDown=${(e) => e.stopPropagation()}
                                                             onClick=${() => generateTimeline(p)}
                                                             disabled=${timelineLoading}
-                                                            class=${`no-shine text-[7px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
+                                                            class=${`no-shine text-[7px] font-black uppercase tracking-[0.08em] px-1.5 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
                                                             title="Compare this path with a sibling as A/B 3-year timelines · 3 credits"
-                                                        >${timelineLoading ? '…' : `Timeline · 3${t('credit.suffix')} →`}</button>
+                                                        >${timelineLoading ? '…' : `TL 3${t('credit.suffix')}`}</button>
                                                     ` : null}
                                                     <button
                                                         onMouseDown=${(e) => e.stopPropagation()}
                                                         onClick=${() => generatePlan(p.label || '')}
                                                         disabled=${planLoading}
-                                                        class=${`no-shine text-[7px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
+                                                        class=${`no-shine text-[7px] font-black uppercase tracking-[0.08em] px-1.5 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
                                                         title="Generate full 30-day plan for this path · 3 credits"
-                                                    >Plan · 3${t('credit.suffix')} →</button>
+                                                    >Plan 3${t('credit.suffix')}</button>
                                                 </div>
                                             </div>
                                             <div class="px-4 py-3.5">
