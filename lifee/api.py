@@ -1419,7 +1419,7 @@ async def simulate_path(req: SimulatePathRequest, request: Request):
     if not (chosen.get("label") or "").strip():
         return {"paths": [], "error": "missing chosenPath"}
 
-    uid, err = await _charge_or_response(request, 2, "simulate-path")
+    uid, err = await _charge_or_response(request, 3, "simulate-path")
     if err:
         return err
 
@@ -1497,13 +1497,13 @@ Reply ONLY in this JSON format ({req.language}):
             text = text.split('```')[1].replace('json', '', 1).strip()
         data = _json.loads(text)
         if not isinstance(data, dict):
-            await _refund(uid, 2, "simulate-path")
+            await _refund(uid, 3, "simulate-path")
             return {"paths": [], "error": "bad response shape"}
         outcome = (data.get("outcome") or "").strip()
         dilemma = (data.get("dilemma") or "").strip()
         raw_paths = data.get("paths")
         if not isinstance(raw_paths, list) or not raw_paths:
-            await _refund(uid, 2, "simulate-path")
+            await _refund(uid, 3, "simulate-path")
             return {"paths": [], "outcome": outcome, "dilemma": dilemma, "error": "no paths returned"}
         paths = []
         for i, p in enumerate(raw_paths[:3]):
@@ -1515,11 +1515,11 @@ Reply ONLY in this JSON format ({req.language}):
                 continue
             paths.append({"id": f"sp{i+1}", "label": label[:42], "summary": summary[:140]})
         if len(paths) < 2:
-            await _refund(uid, 2, "simulate-path")
+            await _refund(uid, 3, "simulate-path")
             return {"paths": paths, "outcome": outcome, "dilemma": dilemma, "error": "too few paths"}
         return {"paths": paths, "outcome": outcome[:400], "dilemma": dilemma[:300]}
     except Exception as e:
-        await _refund(uid, 2, "simulate-path")
+        await _refund(uid, 3, "simulate-path")
         import traceback
         traceback.print_exc()
         return {"paths": [], "error": str(e)}
@@ -1778,18 +1778,17 @@ async def _gemini_grounding_search(query: str) -> str:
 
 @app.post("/generate-personas")
 async def generate_new_personas(req: GeneratePersonasRequest, request: Request):
-    """Use LLM (+ optional Tavily web search) to generate 1-2 brand-new persona definitions.
+    """免费的"推荐预览"：让 LLM 挑 2 个真实历史人物，只生成 id/name/role/voice/cover。
 
-    These are distinct from the existing persona roster — the LLM picks real-world figures
-    or archetypes that would be uniquely valuable for the user's situation and generates
-    a full system prompt (soul) so they can participate in debates without needing disk files.
+    不生成 soul（节省 token）。用户在弹窗里勾选并确认后，前端再调 /generate-persona-soul
+    付费生成 soul。
     """
     if not req.situation.strip():
         return {"personas": []}
 
-    uid, err = await _charge_or_response(request, 3, "generate-personas")
-    if err:
-        return err
+    u = _current_user(request)
+    if not u:
+        return JSONResponse({"error": "unauthorized", "needsLogin": True}, status_code=401)
 
     # 复用对话里的 web_search tool（gemini-2.5-flash + googleSearch grounding）
     search_ctx = ""
@@ -1852,20 +1851,15 @@ async def generate_new_personas(req: GeneratePersonasRequest, request: Request):
         "illuminate this user's situation — fame is irrelevant, fit is everything. "
         "Do NOT pick anyone already in the existing roster above. "
         "Do NOT invent fictional archetypes. Every persona must be a real person with a verifiable life story.\n\n"
-        "For each persona output:\n"
+        "For each persona output ONLY a short preview (no system prompt yet):\n"
         "- id: slug like 'gen-firstname-lastname' (lowercase, hyphens, must start with 'gen-')\n"
         "- name: their real full name or most recognised name (max 25 chars)\n"
         "- role: a SHORT label in CAPS describing their identity/legacy (max 30 chars), "
         "e.g. 'STOIC EMPEROR', 'RENAISSANCE GENIUS', 'JAZZ INNOVATOR'\n"
-        "- voice: one sentence written in their authentic voice, capturing how they actually spoke/wrote (max 120 chars)\n"
-        "- soul: a 200-300 word system prompt. Start with 'You are [Name].' "
-        "Describe their real biography highlights, core beliefs, signature thinking style, "
-        "how they would approach the user's situation, and their speech mannerisms. "
-        "Write in second person. Make them feel like the real person, not a caricature. "
-        "They should respond in the same language as the user.\n\n"
-        'Reply ONLY with a JSON array of 2 objects with keys: id, name, role, voice, soul.\n'
+        "- voice: one sentence written in their authentic voice, capturing how they actually spoke/wrote (max 120 chars)\n\n"
+        'Reply ONLY with a JSON array of 2 objects with keys: id, name, role, voice.\n'
         'Example: [{"id":"gen-simone-de-beauvoir","name":"Simone de Beauvoir","role":"EXISTENTIALIST WRITER",'
-        '"voice":"One is not born a woman, but becomes one.","soul":"You are Simone de Beauvoir..."}]'
+        '"voice":"One is not born a woman, but becomes one."}]'
     )
 
     try:
@@ -1874,39 +1868,36 @@ async def generate_new_personas(req: GeneratePersonasRequest, request: Request):
         chunks = []
         async for chunk in provider.stream(
             messages=[Message(role=MessageRole.USER, content=prompt)],
-            max_tokens=1200,
+            max_tokens=600,
             temperature=0.8,
         ):
             chunks.append(chunk)
         text = "".join(chunks).strip()
         if "```" in text:
             text = text.split("```")[1].replace("json", "", 1).strip()
-        # strip trailing ``` if present
         if text.endswith("```"):
             text = text[:-3].strip()
         personas = json.loads(text)
         if not isinstance(personas, list):
             raise ValueError("not a list")
-        # Validate structure and enforce gen- prefix
         valid = []
         for p in personas[:2]:
             pid = str(p.get("id", "")).strip()
             if not pid.startswith("gen-"):
                 pid = f"gen-{pid}"
-            soul = str(p.get("soul", "")).strip()
-            if not soul or len(soul) < 50:
+            name = str(p.get("name", pid)).strip()[:40]
+            if not name:
                 continue
             valid.append({
                 "id": pid,
-                "name": str(p.get("name", pid))[:40],
+                "name": name,
                 "role": str(p.get("role", ""))[:40].upper(),
-                "avatar": "",   # 不留 emoji，前端拿不到 cover_url 时显示空白
+                "avatar": "",
                 "voice": str(p.get("voice", ""))[:160],
-                "soul": soul,
+                "soul": "",   # 还没生成；用户勾选确认后才调 /generate-persona-soul
                 "cover_url": "",
             })
 
-        # 并行查 Wikipedia 缩略图，找到就塞进 cover_url，找不到保持空白
         if valid:
             thumbs = await asyncio.gather(
                 *[_fetch_wikipedia_thumbnail(p["name"]) for p in valid],
@@ -1916,13 +1907,91 @@ async def generate_new_personas(req: GeneratePersonasRequest, request: Request):
                 if isinstance(thumb, str) and thumb:
                     p["cover_url"] = thumb
 
-        if not valid:
-            await _refund(uid, 3, "generate-personas")
         return {"personas": valid}
     except Exception as e:
-        await _refund(uid, 3, "generate-personas")
         import traceback; traceback.print_exc()
         return {"personas": [], "error": str(e)}
+
+
+class GeneratePersonaSoulRequest(BaseModel):
+    situation: str = ""
+    periods: list = []
+    personas: list = []   # [{id, name, role, voice}] — 用户勾选的 gen-* persona 元数据
+
+
+@app.post("/generate-persona-soul")
+async def generate_persona_soul(req: GeneratePersonaSoulRequest, request: Request):
+    """付费生成 persona 的 system prompt（soul）。
+
+    每次调用按 personas 数量计费 3 cr/个。返回 [{id, soul}, ...]。
+    LLM 失败 / 返回空时全额退款。
+    """
+    metas = [m for m in (req.personas or []) if isinstance(m, dict) and m.get("name")][:2]
+    if not metas:
+        return {"souls": []}
+
+    cost = 3 * len(metas)
+    uid, err = await _charge_or_response(request, cost, "generate-persona-soul")
+    if err:
+        return err
+
+    periods_str = ", ".join(req.periods) if req.periods else "none"
+    persona_block = "\n".join(
+        f"- id: {m.get('id','')} | name: {m.get('name','')} | role: {m.get('role','')} | voice: {m.get('voice','')}"
+        for m in metas
+    )
+
+    prompt = (
+        "You are a persona-writing engine for LIFEE, a life-coaching app where users debate "
+        "their life situations with real historical figures.\n\n"
+        f"User situation: {req.situation.strip()}\n"
+        f"Life context tags: {periods_str}\n\n"
+        "For EACH persona below, write a 200-300 word system prompt (the 'soul'). "
+        "Start with 'You are [Name].' Describe their real biography highlights, core beliefs, "
+        "signature thinking style, how they would approach the user's situation, and their "
+        "speech mannerisms. Write in second person. Make them feel like the real person, "
+        "not a caricature. They should respond in the same language as the user.\n\n"
+        f"Personas:\n{persona_block}\n\n"
+        'Reply ONLY with a JSON array of objects with keys: id, soul.\n'
+        'Example: [{"id":"gen-simone-de-beauvoir","soul":"You are Simone de Beauvoir..."}]'
+    )
+
+    try:
+        provider = _get_provider()
+        from lifee.providers.base import Message, MessageRole
+        chunks = []
+        async for chunk in provider.stream(
+            messages=[Message(role=MessageRole.USER, content=prompt)],
+            max_tokens=1500,
+            temperature=0.8,
+        ):
+            chunks.append(chunk)
+        text = "".join(chunks).strip()
+        if "```" in text:
+            text = text.split("```")[1].replace("json", "", 1).strip()
+        if text.endswith("```"):
+            text = text[:-3].strip()
+        items = json.loads(text)
+        if not isinstance(items, list):
+            raise ValueError("not a list")
+        souls = []
+        seen_ids = {m["id"] for m in metas if m.get("id")}
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            pid = str(it.get("id", "")).strip()
+            soul = str(it.get("soul", "")).strip()
+            if pid in seen_ids and len(soul) >= 50:
+                souls.append({"id": pid, "soul": soul})
+        # 部分失败也按比例退款（缺多少退多少）
+        missing = len(metas) - len(souls)
+        if missing > 0:
+            await _refund(uid, 3 * missing, "generate-persona-soul")
+        return {"souls": souls}
+    except Exception as e:
+        await _refund(uid, cost, "generate-persona-soul")
+        import traceback; traceback.print_exc()
+        return {"souls": [], "error": str(e)}
 
 
 # ---- User Memory API ----
@@ -2220,6 +2289,7 @@ async def _handle_decision(req: DecisionRequest, request: Request):
                     sid, provider, session, uid, req.userId,
                     min(req.maxSpeakers, len(all_participants)) if req.maxSpeakers > 0 else 0,
                     user_input=req.userInput or "",
+                    web_search=req.webSearch,
                 )
                 state.task = _asyncio.create_task(_run_generation_task(sid, state, gen_iter))
 
@@ -2302,7 +2372,7 @@ def _find_persona_id(participant, participants_map):
     return "unknown"
 
 
-async def _stream_sse(moderator, participants, question, mod_module=None, original_delay=None, session_id="", provider=None, session=None, uid="anonymous", chat_user_id="", max_turns=0, user_input=""):
+async def _stream_sse(moderator, participants, question, mod_module=None, original_delay=None, session_id="", provider=None, session=None, uid="anonymous", chat_user_id="", max_turns=0, user_input="", web_search=False):
     """生成 SSE 事件流（逐 chunk 实时推送）"""
     all_participants = [p for _, p in participants]
     current_pid = ""
@@ -2348,8 +2418,8 @@ async def _stream_sse(moderator, participants, question, mod_module=None, origin
           # avoid "Task was destroyed but pending" warnings
           t.add_done_callback(lambda _t: _t.exception() if not _t.cancelled() else None)
 
-      _per_msg_cost = 2 if req.webSearch else 1
-      _per_msg_reason = "chat-web" if req.webSearch else "chat"
+      _per_msg_cost = 2 if web_search else 1
+      _per_msg_reason = "chat-web" if web_search else "chat"
 
       async def _finalize_current():
           nonlocal has_content, current_text

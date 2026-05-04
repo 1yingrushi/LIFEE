@@ -79,6 +79,7 @@
         const [generated, setGenerated]     = useState([]);
         const [loading, setLoading]         = useState(false);
         const [generating, setGenerating]   = useState(false);
+        const [confirming, setConfirming]   = useState(false);
         const abortRef = useRef(null);
 
         useEffect(() => {
@@ -143,8 +144,7 @@
             .then(r => r && !signal.aborted ? r.json() : null)
             .then(data => {
                 if (!data || signal.aborted) { setGenerating(false); return; }
-                if (window.__lifeeMaybe402?.(data)) { setGenerating(false); return; }
-                window.__lifeeRefreshBalance?.();
+                // 这一步现在免费，但 401（未登录）走的是 maybe402 之外的分支
                 if (Array.isArray(data.personas) && data.personas.length > 0) setGenerated(data.personas);
                 setGenerating(false);
             })
@@ -157,11 +157,47 @@
 
         const toggle = (id) => setPicks(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-        const handleConfirm = () => {
+        const handleConfirm = async () => {
             const safeSelectedIds = Array.isArray(selectedIds) ? selectedIds : [];
             const mergedIds = [...new Set([...safeSelectedIds, ...picks])];
             const pickedGenerated = generated.filter(p => picks.includes(p.id));
-            onConfirm({ ids: mergedIds, generatedPersonas: pickedGenerated });
+            const needSoul = pickedGenerated.filter(p => !p.soul);
+
+            if (needSoul.length === 0) {
+                onConfirm({ ids: mergedIds, generatedPersonas: pickedGenerated });
+                return;
+            }
+
+            setConfirming(true);
+            try {
+                const r = await fetch('/generate-persona-soul', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        situation,
+                        periods: [],
+                        personas: needSoul.map(p => ({
+                            id: p.id, name: p.name || '', role: p.role || '', voice: p.voice || ''
+                        })),
+                    }),
+                });
+                const data = await r.json();
+                if (window.__lifeeMaybe402?.(data)) { setConfirming(false); return; }
+                window.__lifeeRefreshBalance?.();
+                const soulMap = {};
+                (data.souls || []).forEach(s => { if (s && s.id) soulMap[s.id] = s.soul || ''; });
+                const enriched = pickedGenerated.map(p => p.soul ? p : { ...p, soul: soulMap[p.id] || '' });
+                // soul 为空的 gen-* persona 进 chat 会被后端跳过，干脆这里就过滤掉
+                const usable = enriched.filter(p => p.soul);
+                const finalIds = [...new Set([
+                    ...safeSelectedIds,
+                    ...picks.filter(id => !id.startsWith('gen-') || usable.find(p => p.id === id)),
+                ])];
+                onConfirm({ ids: finalIds, generatedPersonas: usable });
+            } catch (e) {
+                setConfirming(false);
+            }
         };
 
         const handleSkip = () => onConfirm({
@@ -211,7 +247,7 @@
                             <div>
                                 <p class="text-[9px] uppercase tracking-[0.3em] font-bold text-secondary/80 mb-2 flex items-center gap-1.5">
                                     <span class="inline-block w-3 h-3 border-2 border-secondary/60 border-t-transparent rounded-full animate-spin"></span>
-                                    ${window.t?.('recommend.generating') || 'Creating new voices just for you…'} <span class="opacity-60">· 3${window.t?.('credit.suffix') || 'cr'}</span>
+                                    ${window.t?.('recommend.generating') || 'Creating new voices just for you…'}
                                 </p>
                                 <div class="grid grid-cols-2 gap-3">
                                     <${SkeletonCard} /><${SkeletonCard} />
@@ -236,14 +272,31 @@
                     </div>
 
                     <div class="shrink-0 px-8 pb-8 pt-4 border-t border-white/10 space-y-3">
-                        <button
-                            onClick=${handleConfirm}
-                            disabled=${picks.length === 0 || loading}
-                            class="no-shine w-full py-3.5 bg-primary text-on-primary rounded-full font-bold uppercase tracking-[0.2em] text-[11px] shadow-lg hover:bg-primary/90 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                        >${window.t?.('recommend.confirm') || 'Add to My Panel & Continue'}</button>
+                        ${(() => {
+                            const genCount = generated.filter(p => picks.includes(p.id) && !p.soul).length;
+                            const cost = genCount * 3;
+                            const crSuffix = window.t?.('credit.suffix') || 'cr';
+                            const baseLabel = window.t?.('recommend.confirm') || 'Add to My Panel & Continue';
+                            const label = confirming
+                                ? (window.t?.('recommend.generatingSoul') || 'Creating souls…')
+                                : cost > 0
+                                    ? `${baseLabel} · ${cost}${crSuffix}`
+                                    : baseLabel;
+                            return html`
+                                <button
+                                    onClick=${handleConfirm}
+                                    disabled=${picks.length === 0 || loading || confirming}
+                                    class="no-shine w-full py-3.5 bg-primary text-on-primary rounded-full font-bold uppercase tracking-[0.2em] text-[11px] shadow-lg hover:bg-primary/90 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    ${confirming ? html`<span class="inline-block w-3 h-3 border-2 border-on-primary/60 border-t-transparent rounded-full animate-spin"></span>` : null}
+                                    <span>${label}</span>
+                                </button>
+                            `;
+                        })()}
                         <button
                             onClick=${handleSkip}
-                            class="no-shine w-full py-2 text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface/40 hover:text-on-surface/70 transition-colors"
+                            disabled=${confirming}
+                            class="no-shine w-full py-2 text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface/40 hover:text-on-surface/70 transition-colors disabled:opacity-30"
                         >${window.t?.('recommend.skip') || "Skip — I'll choose my own"}</button>
                     </div>
                 </div>

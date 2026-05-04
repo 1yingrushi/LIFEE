@@ -1383,33 +1383,8 @@
                     parentId: consequenceNode.id,
                     depth: node.depth + 2,
                 }));
-                // 如果之前已经为这个 node 跑过 walk，先清掉旧子树再添新的；
-                // walkedPathIds 里属于旧子树的也得一并清掉，否则会误判 fade。
-                const collectSubtreeIds = (rootId, list) => {
-                    const out = new Set();
-                    const queue = [rootId];
-                    while (queue.length) {
-                        const cur = queue.shift();
-                        for (const x of list) {
-                            if (x.parentId === cur && !out.has(x.id)) {
-                                out.add(x.id);
-                                queue.push(x.id);
-                            }
-                        }
-                    }
-                    return out;
-                };
-                const removed = collectSubtreeIds(node.id, pathOptions);
-                setPathOptions(prev => {
-                    const filtered = prev.filter(x => !removed.has(x.id));
-                    return [...filtered, consequenceNode, ...children];
-                });
-                setWalkedPathIds(prev => {
-                    const next = new Set(prev);
-                    for (const rid of removed) next.delete(rid);
-                    next.add(node.id);
-                    return next;
-                });
+                setPathOptions(prev => [...prev, consequenceNode, ...children]);
+                setWalkedPathIds(prev => new Set([...prev, node.id]));
                 // 把这次 walk 也写进对话历史（personaId='lifee-roadmap'，role='user'）。
                 // 本地乐观插入 + 后端 /note 持久化。下次刷新这条记录还在。
                 const noteParts = [`📍 假设我走了「${node.label}」。`];
@@ -2625,14 +2600,14 @@
                                             <div class=${`px-3 py-2 border-b border-outline/15 flex flex-wrap items-center justify-between gap-1.5 ${c.bg}`}>
                                                 <span class=${`text-[8px] font-black uppercase tracking-[0.28em] ${c.text} truncate min-w-0`}>${pathLabel}</span>
                                                 <div class="flex flex-wrap items-center gap-1 justify-end">
-                                                    ${canWalk ? html`
+                                                    ${canWalk && !isWalked ? html`
                                                         <button
                                                             onMouseDown=${(e) => e.stopPropagation()}
                                                             onClick=${() => simulatePath(p)}
                                                             disabled=${isSimulating}
                                                             class=${`no-shine text-[7px] font-black uppercase tracking-[0.08em] px-1.5 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
-                                                            title=${isWalked ? 'Re-simulate consequences from this path · 2 credits' : 'Simulate consequences if you walked this path · 2 credits'}
-                                                        >${isSimulating ? '…' : (isWalked ? `Re-walk 2${t('credit.suffix')}` : `Walk 2${t('credit.suffix')}`)}</button>
+                                                            title="Simulate consequences if you walked this path · 3 credits"
+                                                        >${isSimulating ? '…' : `Walk 3${t('credit.suffix')}`}</button>
                                                     ` : null}
                                                     <button
                                                         onMouseDown=${(e) => e.stopPropagation()}
