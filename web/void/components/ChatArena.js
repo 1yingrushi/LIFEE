@@ -553,7 +553,10 @@
         const mapMaxWidth = () => {
             const fallback = typeof window !== 'undefined' ? window.innerWidth : 1280;
             const containerW = chatRootRef.current?.offsetWidth || fallback;
-            return pathOptions.length > 0 ? containerW : Math.max(320, containerW - 120);
+            // Roadmap 模式（pathOptions 已加载 / 正在加载）时铺满容器；
+            // 普通 voice map（只摘要）留 120px 给左侧 chat。
+            const roadmapMode = pathOptions.length > 0 || pathLoading;
+            return roadmapMode ? containerW : Math.max(320, containerW - 120);
         };
         const [mapWidth, setMapWidth]           = useState(() => {
             try {
@@ -572,6 +575,19 @@
             window.addEventListener('resize', onResize);
             return () => window.removeEventListener('resize', onResize);
         }, []);
+        // Roadmap 模式：进入时强制铺满容器宽度。仅在「从无到有」时触发，
+        // 用户后续手动拖 resize handle 不会被覆盖。
+        const _roadmapEntered = useRef(false);
+        useEffect(() => {
+            const inRoadmap = showVoiceMap && (pathOptions.length > 0 || pathLoading);
+            if (inRoadmap && !_roadmapEntered.current) {
+                _roadmapEntered.current = true;
+                const w = chatRootRef.current?.offsetWidth || 0;
+                if (w > 0) setMapWidth(w);
+            } else if (!inRoadmap) {
+                _roadmapEntered.current = false;
+            }
+        }, [showVoiceMap, pathOptions.length, pathLoading]);
 
         // ── Refs ──────────────────────────────────────────────────────────────
         const scrollRef        = useRef(null);
@@ -3194,12 +3210,36 @@
                             ` : null}
 
                             ${!planLoading && planData?.weeks ? html`
-                                <div class="px-6 py-3 border-b border-white/10 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
+                                <div
+                                    class="px-6 py-3 border-b border-white/10 flex gap-2 overflow-x-auto no-scrollbar shrink-0 cursor-grab active:cursor-grabbing select-none"
+                                    onMouseDown=${(e) => {
+                                        const el = e.currentTarget;
+                                        el._dragStartX = e.pageX - el.offsetLeft;
+                                        el._dragStartScroll = el.scrollLeft;
+                                        el._dragMoved = false;
+                                        el._dragging = true;
+                                    }}
+                                    onMouseMove=${(e) => {
+                                        const el = e.currentTarget;
+                                        if (!el._dragging) return;
+                                        e.preventDefault();
+                                        const x = e.pageX - el.offsetLeft;
+                                        const dx = x - el._dragStartX;
+                                        if (Math.abs(dx) > 4) el._dragMoved = true;
+                                        el.scrollLeft = el._dragStartScroll - dx;
+                                    }}
+                                    onMouseUp=${(e) => { e.currentTarget._dragging = false; }}
+                                    onMouseLeave=${(e) => { e.currentTarget._dragging = false; }}
+                                >
                                     ${planData.weeks.map((week, wi) => html`
                                         <button
                                             key=${week.id || wi}
-                                            onClick=${() => setPlanWeek(wi)}
-                                            class=${`shrink-0 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all border ${
+                                            onClick=${(e) => {
+                                                // 拖过则吞掉这次 click，避免拖动尾巴误切 week
+                                                if (e.currentTarget.parentElement?._dragMoved) return;
+                                                setPlanWeek(wi);
+                                            }}
+                                            class=${`no-shine shrink-0 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all border ${
                                                 planWeek === wi
                                                     ? 'bg-on-surface text-surface border-on-surface'
                                                     : 'bg-surface-container-high/40 text-on-surface-variant/70 border-white/10 hover:border-white/25'
