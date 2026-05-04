@@ -1603,12 +1603,64 @@
                 `;
             }
 
-            // Roadmap journal note：居中、不像 user 也不像角色，专门视觉风格
+            // 解析"决策场景文本"——walk 日志条 + ask the table 用户消息共用同一格式
+            // 假设我走了「X」/ 后来：Y / 现在的问题是：Z（ask the table 多个 "你们怎么看？" 尾巴）
+            const parseWalk = (txt) => {
+                if (!txt) return null;
+                const m1 = txt.match(/假设我走了「(.+?)」/);
+                const m2 = txt.match(/后来：([\s\S]+?)(?:\n\n现在的问题是：|$)/);
+                const m3 = txt.match(/现在的问题是：([\s\S]+?)(?:\n\n你们怎么看|$)/);
+                if (!m1 && !m2 && !m3) return null;
+                return {
+                    label: m1 ? m1[1].trim() : '',
+                    outcome: m2 ? m2[1].trim() : '',
+                    dilemma: m3 ? m3[1].trim() : '',
+                };
+            };
+            const renderWalkCard = (parsed, headerKey, headerFallback) => html`
+                <div class="bg-surface-container-high/40 border border-dashed border-primary/35 rounded-2xl overflow-hidden shadow-sm">
+                    <div class="px-5 py-2.5 border-b border-outline/15 flex items-center justify-between gap-2 bg-primary/5">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="material-symbols-outlined text-primary/70 shrink-0" style=${{ fontSize: '14px' }}>route</span>
+                            <span class="text-[9px] font-black uppercase tracking-[0.28em] text-primary/80 truncate">${t(headerKey) || headerFallback}</span>
+                        </div>
+                        ${parsed.label ? html`<span class="text-[10px] font-bold text-on-surface/85 truncate max-w-[60%]">${parsed.label}</span>` : null}
+                    </div>
+                    <div class="px-5 py-3.5 space-y-3">
+                        ${parsed.outcome ? html`
+                            <div>
+                                <div class="text-[8px] font-black uppercase tracking-[0.25em] text-on-surface-variant/45 mb-1">${t('chat.scenarioOutcome') || 'Outcome'}</div>
+                                <div class="text-[12px] leading-relaxed text-on-surface/90 whitespace-pre-line">${parsed.outcome}</div>
+                            </div>
+                        ` : null}
+                        ${parsed.dilemma ? html`
+                            <div class="pt-3 border-t border-outline/10">
+                                <div class="text-[8px] font-black uppercase tracking-[0.25em] text-primary/70 mb-1">${t('chat.scenarioDilemma') || 'New question'}</div>
+                                <div class="text-[12px] leading-snug font-medium text-on-surface whitespace-pre-line">${parsed.dilemma}</div>
+                            </div>
+                        ` : null}
+                    </div>
+                </div>
+            `;
+
+            // Roadmap journal note：把 walk 的 prompt 结构化成"决策场景卡"
+            // 不暴露提示词文本（"假设我走了「X」/ 后来：Y / 现在的问题是：Z"）。
             if (isRoadmap) {
+                const parsed = parseWalk(m.text);
+                if (!parsed) {
+                    // 解析失败时回退到旧版纯文本气泡（不会破坏老消息）
+                    return html`
+                        <div key=${idx} class="flex justify-center my-3">
+                            <div class="max-w-[80%] text-[12px] leading-relaxed text-on-surface-variant/85 bg-surface-container-high/55 border border-primary/25 px-5 py-3 rounded-2xl whitespace-pre-line shadow-sm">
+                                ${m.text || ''}
+                            </div>
+                        </div>
+                    `;
+                }
                 return html`
-                    <div key=${idx} class="flex justify-center my-3">
-                        <div class="max-w-[80%] text-[12px] leading-relaxed text-on-surface-variant/85 bg-surface-container-high/55 border border-primary/25 px-5 py-3 rounded-2xl whitespace-pre-line shadow-sm">
-                            ${m.text}
+                    <div key=${idx} class="flex justify-center my-4">
+                        <div class="max-w-[78%] w-full">
+                            ${renderWalkCard(parsed, 'chat.scenarioWalked', 'Decision walked')}
                         </div>
                     </div>
                 `;
@@ -1616,6 +1668,27 @@
 
             if (isUser) {
                 const ava = userAvatar || user?.user_metadata?.avatar_url || '🙂';
+                // Ask-the-table 触发的用户消息（"假设我走了「X」/ 后来 / 现在的问题是 / 你们怎么看？"）
+                // → 渲染场景卡而不是裸文本，避免暴露提示词
+                const askParsed = parseWalk(m.text);
+                if (askParsed && (askParsed.outcome || askParsed.dilemma)) {
+                    return html`
+                        <div key=${idx} class="flex items-start gap-4 max-w-[85%] md:max-w-[70%] ml-auto flex-row-reverse animate-in">
+                            <div class="w-10 h-10 rounded-full border-2 border-on-surface-variant/30 bg-surface-container-high flex items-center justify-center text-on-surface font-bold text-sm shrink-0 overflow-hidden">
+                                ${!(typeof ava === 'string' && /^(https?:|\/|data:)/.test(ava))
+                                    ? html`<span class="text-lg">${ava}</span>`
+                                    : html`<img src=${ava} class="w-full h-full object-cover" />`
+                                }
+                            </div>
+                            <div class="space-y-1.5 items-end flex flex-col flex-1 min-w-0">
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 mr-1">You</p>
+                                <div class="w-full">
+                                    ${renderWalkCard(askParsed, 'chat.scenarioAskTable', 'Asked the table')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
                 return html`
                     <div key=${idx} class="flex items-start gap-4 max-w-[85%] md:max-w-[70%] ml-auto flex-row-reverse animate-in">
                         <!-- Avatar -->
