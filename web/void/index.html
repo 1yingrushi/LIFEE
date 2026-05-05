@@ -2080,6 +2080,16 @@
                             disabled=${loading || !code.trim() || !user}
                             class="w-full btn-gradient rounded-xl py-4 text-base font-semibold disabled:opacity-40"
                         >${loading ? t('redeem.redeeming') : t('redeem.action')}</button>
+
+                        <a
+                            href="https://m.tb.cn/h.iCcIFEV?tk=zgYE5NxUXJk CZ321"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold border border-outline/25 text-on-surface-variant/70 hover:text-on-surface hover:border-outline/50 hover:bg-surface-container/60 transition-all"
+                        >
+                            <span class="material-symbols-outlined" style=${{ fontSize: '17px' }}>shopping_bag</span>
+                            ${window.__lifeeLocale === 'zh' ? '购买积分兑换码' : 'Buy Credits'}
+                        </a>
                     </div>
                 </div>
             `;
