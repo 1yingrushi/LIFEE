@@ -22,6 +22,7 @@ export interface Env {
 	userInput?: string; // 前端每一轮用户输入（可选）
 	personas?: Persona[];
 	birthDate?: string; // YYYY-MM-DD (Gregorian)
+	language?: string;  // explicit UI language, e.g. "Chinese" | "English" (optional override)
   };
   
   function extractJsonObject(text: string): any | null {
@@ -74,10 +75,23 @@ export interface Env {
 	return /[\u4E00-\u9FFF]/.test(text) ? "zh" : "en";
   }
 
-  function decideTargetLang(userInput: string, situation: string): TargetLang {
+  function decideTargetLang(userInput: string, situation: string, explicitLang?: string): TargetLang {
 	// IMPORTANT: prioritize the user's latest input to avoid old context (e.g. earlier Chinese rounds)
 	// forcing the model back into Chinese even when the user now types English.
-	if (userInput?.trim()) return detectLangFromText(userInput);
+	if (userInput?.trim()) {
+	  const detected = detectLangFromText(userInput);
+	  // If the input is a structured tarot/mystic result block that mixes scripts (Chinese card
+	  // names + English markers), fall back to the explicit UI language preference if provided.
+	  if (explicitLang && detected === 'zh' && /\[Tarot Draw Result\]/.test(userInput)) {
+		if (explicitLang === 'English' || explicitLang === 'en') return 'en';
+	  }
+	  return detected;
+	}
+	// No free-text input — use explicit language preference as the tiebreaker.
+	if (explicitLang) {
+	  if (explicitLang === 'Chinese' || explicitLang === 'zh') return 'zh';
+	  if (explicitLang === 'English' || explicitLang === 'en') return 'en';
+	}
 	return detectLangFromText(situation || "");
   }
 
@@ -226,6 +240,27 @@ export interface Env {
 			  ].join("\n"),
 			},
 		  },
+		  "tarot-reader": {
+			defaultName: "塔罗师",
+			prompt: {
+			  en: [
+				"You are 'Tarot Mirror' — a reader using Waite, Thoth and modern psychological tarot as a unified system. Tarot is a mirror, not a crystal ball; your goal is to help the user see current patterns and available next steps, not to pronounce fate.",
+				"Before the user has drawn cards: do not interpret. State which spread you will use for the question, and invite the user to draw.",
+				"After the user provides [Tarot Draw Result]: interpret strictly from the spread, card positions, card names, orientation (upright/reversed), seed and question. Do not change cards, add cards, or skip orientations.",
+				"Method: open with empathy, then interpret card by card. For each card choose 1–2 lenses from: mirror / window / door / anchor. For multi-card spreads, discuss card relationships, element distribution, major/minor arcana ratio, and organise into a narrative arc.",
+				"Style: warm, clear-eyed, specific. Avoid Barnum generalities. Do not say 'everything will be fine' or 'trust your intuition'. End with one small actionable step for this week. Remind the user that the cards show present energy — direction can always be changed.",
+				"Safety: give no medical, legal or investment certainty. If the user expresses self-harm, pause the reading, show care, and suggest professional support.",
+			  ].join("\n"),
+			  zh: [
+				"你是「塔罗师 / Tarot Mirror」，使用韦特、托特与现代心理塔罗融合体系。塔罗是镜子，不是水晶球；你的目标是帮助用户看见当下模式与可选择的下一步，而不是宣判命运。",
+				"当用户还没有抽牌结果时，不要凭空解读。先说明你将根据问题使用哪种牌阵，并邀请用户点击牌阵进行抽牌。",
+				"当用户提供【塔罗抽牌结果】后，必须基于牌阵、牌位、牌名、正逆位、seed 和问题进行解读。不要改牌、不要补牌、不要跳过正逆位。",
+				"解读方法：先共情，再逐牌解读；对每张牌从镜子/窗户/门/锚四个透镜中选最相关的 1-2 个；多牌阵必须说明牌间关系、元素分布、大/小阿卡纳比例，并组织成叙事弧。",
+				"风格：温暖、清醒、具体。避免巴纳姆废话，不说"一切都会好""相信直觉"这类空话。结尾给一个本周可执行的小行动，并提醒牌显示的是当下能量，选择随时可以改变走向。",
+				"安全边界：不做医疗、法律、投资确定建议；遇到自伤表达时暂停塔罗解读，先表达关心并建议专业支持。",
+			  ].join("\n"),
+			},
+		  },
 		};
 
 		const rawPersonas: Persona[] =
@@ -250,7 +285,7 @@ export interface Env {
 		});
   
 		const userInput = body.userInput?.trim() || "";
-		const targetLang = decideTargetLang(userInput, situation);
+		const targetLang = decideTargetLang(userInput, situation, body.language);
 		const TARGET_LANGUAGE = langName(targetLang);
 		const stageExample = targetLang === "zh" ? "（皱眉）" : "(frowns)";
 

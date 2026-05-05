@@ -232,12 +232,12 @@
         ),
     ];
     const TAROT_SPREADS = {
-        single: { name: '单张牌', positions: [{ name: '当前指引', key: true }] },
-        three: { name: '三牌阵', positions: [{ name: '过去' }, { name: '现在', key: true }, { name: '未来', favor: true }] },
-        diamond: { name: '五牌阵', positions: [{ name: '核心', key: true }, { name: '根源' }, { name: '阻力' }, { name: '潜力' }, { name: '建议', key: true, favor: true }] },
-        moon: { name: '月亮牌阵', positions: [{ name: '新月', key: true }, { name: '上弦' }, { name: '满月', key: true }, { name: '下弦' }] },
-        horseshoe: { name: '马蹄形', positions: [{ name: '远期过去' }, { name: '近期过去' }, { name: '当前', key: true }, { name: '近期未来' }, { name: '外部影响', key: true }, { name: '建议', favor: true }, { name: '结果', key: true, favor: true }] },
-        celtic: { name: '凯尔特十字', positions: [{ name: '核心', key: true }, { name: '交叉' }, { name: '意识目标' }, { name: '根基过去' }, { name: '近期过去', key: true }, { name: '近期未来' }, { name: '自我' }, { name: '环境' }, { name: '希望与恐惧' }, { name: '结果', key: true, favor: true }] },
+        single:    { name: '单张牌',    name_en: 'Single Card',        positions: [{ name: '当前指引', name_en: 'Current Guidance', key: true }] },
+        three:     { name: '三牌阵',    name_en: 'Three-Card Spread',  positions: [{ name: '过去', name_en: 'Past' }, { name: '现在', name_en: 'Present', key: true }, { name: '未来', name_en: 'Future', favor: true }] },
+        diamond:   { name: '五牌阵',    name_en: 'Five-Card Diamond',  positions: [{ name: '核心', name_en: 'Core', key: true }, { name: '根源', name_en: 'Root' }, { name: '阻力', name_en: 'Block' }, { name: '潜力', name_en: 'Potential' }, { name: '建议', name_en: 'Guidance', key: true, favor: true }] },
+        moon:      { name: '月亮牌阵',  name_en: 'Moon Spread',        positions: [{ name: '新月', name_en: 'New Moon', key: true }, { name: '上弦', name_en: 'Waxing' }, { name: '满月', name_en: 'Full Moon', key: true }, { name: '下弦', name_en: 'Waning' }] },
+        horseshoe: { name: '马蹄形',    name_en: 'Horseshoe',          positions: [{ name: '远期过去', name_en: 'Distant Past' }, { name: '近期过去', name_en: 'Recent Past' }, { name: '当前', name_en: 'Present', key: true }, { name: '近期未来', name_en: 'Near Future' }, { name: '外部影响', name_en: 'External Influence', key: true }, { name: '建议', name_en: 'Guidance', favor: true }, { name: '结果', name_en: 'Outcome', key: true, favor: true }] },
+        celtic:    { name: '凯尔特十字', name_en: 'Celtic Cross',      positions: [{ name: '核心', name_en: 'The Present', key: true }, { name: '交叉', name_en: 'The Challenge' }, { name: '意识目标', name_en: 'Conscious Goal' }, { name: '根基过去', name_en: 'Foundation' }, { name: '近期过去', name_en: 'Recent Past', key: true }, { name: '近期未来', name_en: 'Near Future' }, { name: '自我', name_en: 'Self' }, { name: '环境', name_en: 'Environment' }, { name: '希望与恐惧', name_en: 'Hopes & Fears' }, { name: '结果', name_en: 'Outcome', key: true, favor: true }] },
     };
     const tarotTimeFactor = () => {
         const h = new Date().getHours();
@@ -290,9 +290,14 @@
             }
             const card = pool.splice(Math.min(idx, pool.length - 1), 1)[0];
             const uprightProb = pos.favor ? 0.7 : 0.6;
-            return { position: pos.name, card: card.name, orientation: rng() < uprightProb ? '正位' : '逆位', is_major: card.is_major };
+            const upright = rng() < uprightProb;
+            return {
+                position: pos.name, position_en: pos.name_en || pos.name,
+                card: card.name, orientation: upright ? '正位' : '逆位', orientation_en: upright ? 'upright' : 'reversed',
+                is_major: card.is_major,
+            };
         });
-        return { seed, spread: spreadKey, spread_name: spread.name, question, time_factor: time.key, time_label: time.label, cards };
+        return { seed, spread: spreadKey, spread_name: spread.name, spread_name_en: spread.name_en || spread.name, question, time_factor: time.key, time_label: time.label, cards };
     };
 
     // ── Language detection ────────────────────────────────────────────────────
@@ -363,16 +368,17 @@
     const buildTarotInviteText = (spreadKey, question, personaName, lang) => {
         const zh = lang === 'Chinese' || lang === 'zh' || window.__lifeeLocale === 'zh';
         const spread = TAROT_SPREADS[spreadKey] || TAROT_SPREADS.three;
+        const spreadName = zh ? spread.name : (spread.name_en || spread.name);
         const intro = zh
-            ? `${personaName || '塔罗师'}会用「${spread.name}」来看这个问题。点击这张消息进入抽牌页面，亲手抽完牌后我再解读。`
-            : `${personaName || 'Tarot reader'} will use the ${spread.name} for this question. Click this message to draw the cards, then I will interpret the spread.`;
+            ? `${personaName || '塔罗师'}会用「${spreadName}」来看这个问题。点击这张消息进入抽牌页面，亲手抽完牌后我再解读。`
+            : `${personaName || 'Tarot Mirror'} will use the ${spreadName} for this question. Click this card to draw, then I will interpret the spread.`;
         return JSON.stringify({
             __lifee_tarot_invite__: {
                 spread: spreadKey,
-                spreadName: spread.name,
+                spreadName,
                 question,
                 intro,
-                positions: spread.positions.map(p => p.name),
+                positions: spread.positions.map(p => zh ? p.name : (p.name_en || p.name)),
             },
         });
     };
@@ -1494,9 +1500,29 @@
         };
 
         const formatTarotResultMessage = (result) => {
-            const cards = (result.cards || [])
-                .map((c, idx) => `${idx + 1}. ${c.position}：${c.card}（${c.orientation}${c.is_major ? '，大阿卡纳' : ''}）`)
-                .join('\n');
+            const isEn = (language || detectLang(result.question || '')) === 'English';
+            const cards = (result.cards || []).map((c, idx) => {
+                if (isEn) {
+                    const pos = c.position_en || c.position;
+                    const ori = c.orientation_en || c.orientation;
+                    const major = c.is_major ? ', Major Arcana' : '';
+                    return `${idx + 1}. ${pos}: ${c.card} (${ori}${major})`;
+                }
+                return `${idx + 1}. ${c.position}：${c.card}（${c.orientation}${c.is_major ? '，大阿卡纳' : ''}）`;
+            }).join('\n');
+            if (isEn) {
+                return [
+                    '[Tarot Draw Result]',
+                    `Question: ${result.question || context?.situation || ''}`,
+                    `Spread: ${result.spread_name_en || result.spread_name}`,
+                    `Draw seed: ${result.seed}`,
+                    `Time factor: ${result.time_factor}`,
+                    '',
+                    cards,
+                    '',
+                    'Please interpret the spread based on the positions, card names, and orientations above. Start with empathy, then analyse each card, and end with one concrete action suggestion.',
+                ].join('\n');
+            }
             return [
                 '【塔罗抽牌结果】',
                 `问题：${result.question || context?.situation || ''}`,
