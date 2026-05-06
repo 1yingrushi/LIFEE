@@ -2049,10 +2049,9 @@
             return html`
                 <div class="fixed inset-0 z-50 flex items-center justify-center">
                     <div class="absolute inset-0 bg-black/70 backdrop-blur-md" onClick=${onClose}></div>
-                    <div class="relative w-full max-w-md mx-4 glass-card rounded-3xl p-10 animate-in iridescent-border" style="background: rgb(var(--color-surface) / 0.96);">
+                    <div class="relative w-full max-w-md mx-4 glass-card rounded-3xl p-10 animate-in iridescent-border" style=${{ background: 'rgb(var(--color-surface-container) / 0.88)' }}>
 
                         ${showBuy ? html`
-                            <!-- ── Buy Credits view ── -->
                             <div class="flex items-center justify-between mb-7">
                                 <button onClick=${() => setShowBuy(false)} class="w-8 h-8 rounded-full btn-ghost flex items-center justify-center">
                                     <span class="material-symbols-outlined" style=${{ fontSize: '18px' }}>arrow_back</span>
@@ -2090,7 +2089,6 @@
                                 `)}
                             </div>
                         ` : html`
-                            <!-- ── Redeem Code view ── -->
                             <div class="flex items-center justify-between mb-7">
                                 <div class="flex items-center gap-2.5">
                                     <span class="material-symbols-outlined text-primary" style=${{ fontSize: '22px' }}>redeem</span>
