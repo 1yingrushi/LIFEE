@@ -437,6 +437,7 @@
         onOpenShare,
         debateSettings,
         setDebateSettings,
+        onOpenMobileNav,
     }) => {
         // ── State ─────────────────────────────────────────────────────────────
         const [history, setHistory]             = useState(initialMessages);
@@ -2960,11 +2961,16 @@
               <div class="h-full flex flex-col flex-1 min-w-0 overflow-hidden">
 
                 <!-- ── Header ── -->
-                <header class="flex justify-between items-center w-full px-8 h-20 bg-surface-dim/30 backdrop-blur-lg border-b border-outline/15 z-10 shrink-0">
-                    <div class="flex items-center gap-6">
-                        <div>
-                            <h2 class="text-xl md:text-2xl font-headline font-bold tracking-tight text-on-surface">${t('chat.council')}</h2>
-                            <p class="text-[10px] uppercase tracking-[0.2em] text-primary/80 leading-none mt-0.5">${(selectedPersonas || []).length} ${(selectedPersonas || []).length === 1 ? t('chat.voice') : t('chat.voices')} ${t('chat.inSession')}</p>
+                <header class="flex justify-between items-center w-full px-4 md:px-8 h-16 md:h-20 bg-surface-dim/30 backdrop-blur-lg border-b border-outline/15 z-10 shrink-0">
+                    <div class="flex items-center gap-3 md:gap-6 min-w-0">
+                        <button
+                            onClick=${() => onOpenMobileNav?.()}
+                            class="md:hidden -ml-1 w-9 h-9 rounded-md flex items-center justify-center text-on-surface-variant hover:text-primary shrink-0"
+                            aria-label="Open menu"
+                        ><span class="material-symbols-outlined" style=${{ fontSize: '22px' }}>menu</span></button>
+                        <div class="min-w-0">
+                            <h2 class="text-lg md:text-2xl font-headline font-bold tracking-tight text-on-surface truncate">${t('chat.council')}</h2>
+                            <p class="text-[10px] uppercase tracking-[0.2em] text-primary/80 leading-none mt-0.5 truncate">${(selectedPersonas || []).length} ${(selectedPersonas || []).length === 1 ? t('chat.voice') : t('chat.voices')} ${t('chat.inSession')}</p>
                         </div>
                         <!-- Member Avatars cluster — click to edit members -->
                         <button

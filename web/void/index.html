@@ -207,7 +207,7 @@
 
     <!-- Void-specific component files -->
     <script src="./components/ui.js"></script>
-    <script src="./components/ChatArena.js?v=20260506-ziwei-master"></script>
+    <script src="./components/ChatArena.js?v=20260507-mobile-drawer"></script>
     <script src="./components/modals.js?v=20260430-mystic-png-avatars"></script>
     <script src="./components/PersonaRecommendModal.js?v=20260504-soul-split"></script>
 
@@ -453,6 +453,38 @@
         /* ── Sidebar transition ── */
         .sidebar-transition {
             transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), width 0.3s cubic-bezier(0.4,0,0.2,1);
+        }
+
+        /* ── Mobile drawer (<768px)：fixed 定位 + 左滑出。≥768px 还原成普通栏 ── */
+        .sidebar-drawer {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 50;
+            width: 18rem;
+            max-width: 85vw;
+            transform: translateX(-100%);
+        }
+        .sidebar-drawer.is-open {
+            transform: translateX(0);
+        }
+        @media (min-width: 768px) {
+            .sidebar-drawer {
+                position: relative;
+                width: var(--sidebar-w, 18rem);
+                max-width: none;
+                z-index: auto;
+                transform: none !important;
+                flex-shrink: 0;
+            }
+        }
+        /* Mobile-only floating hamburger trigger inside view headers */
+        .mobile-nav-trigger {
+            display: inline-flex;
+        }
+        @media (min-width: 768px) {
+            .mobile-nav-trigger { display: none; }
         }
 
         /* ── Persona card hover ── */
@@ -1552,6 +1584,7 @@
             sessionId, setSessionId, setSelectedIds,
             personas, onLogin, onSignOut, userAvatar,
             sidebarOpen, setSidebarOpen,
+            isMobile, mobileNavOpen, setMobileNavOpen,
             onOpenRedeem, onOpenFeedback,
             themeMode, setThemeMode,
             openConfirm,
@@ -1739,11 +1772,11 @@
 
             return html`
                 <aside
-                    class="sidebar-transition hidden md:flex flex-col h-full bg-surface-container-low/60 backdrop-blur-2xl border-r border-outline/15 shrink-0 overflow-hidden"
-                    style=${{ width: sidebarOpen ? '18rem' : '3.5rem' }}
+                    class=${`sidebar-transition sidebar-drawer flex flex-col h-full bg-surface-container-low/60 backdrop-blur-2xl border-r border-outline/15 overflow-hidden ${isMobile && mobileNavOpen ? 'is-open' : ''}`}
+                    style=${{ '--sidebar-w': sidebarOpen ? '18rem' : '3.5rem' }}
                     id="void-sidebar"
                 >
-                    ${!sidebarOpen ? collapsedInner : html`
+                    ${(!sidebarOpen && !isMobile) ? collapsedInner : html`
                     <div class="flex flex-col h-full w-72 pt-10 px-6 pb-10 overflow-y-auto">
                     <!-- Masthead block -->
                     <div class="pb-4 border-b border-on-surface/10 mb-8">
@@ -1775,10 +1808,13 @@
                                     <span class="material-symbols-outlined" style=${{ fontSize: '18px', fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20" }}>dark_mode</span>
                                 </button>
                                 <button
-                                    onClick=${() => setSidebarOpen(false)}
+                                    onClick=${() => isMobile ? setMobileNavOpen?.(false) : setSidebarOpen(false)}
                                     class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant/55 border border-outline/20 bg-surface-container-high/50 hover-warm-icon shrink-0"
-                                    title="Collapse sidebar"
-                                ><${Icon} name="Sidebar" size=${16} style=${{ transform: 'scaleX(1.35)' }} /></button>
+                                    title=${isMobile ? 'Close menu' : 'Collapse sidebar'}
+                                >${isMobile
+                                    ? html`<span class="material-symbols-outlined" style=${{ fontSize: '18px' }}>close</span>`
+                                    : html`<${Icon} name="Sidebar" size=${16} style=${{ transform: 'scaleX(1.35)' }} />`
+                                }</button>
                             </div>
                         </div>
                         <p class="text-[10px] font-label uppercase tracking-[0.3em] text-on-surface-variant/60 mt-2">${t('nav.subtitle')}</p>
@@ -2290,7 +2326,7 @@
         // ══════════════════════════════════════════════
         //  HOME VIEW
         // ══════════════════════════════════════════════
-        function HomeView({ user, context, setContext, setView, personas, customPersonas, selectedIds, setSelectedIds, setPersonas, upsertCustomPersona, startFreshDebate, chatSessions, debateSettings, setDebateSettings, setPersonaCoverOverrides, setPersonaAvatarOverrides }) {
+        function HomeView({ user, context, setContext, setView, personas, customPersonas, selectedIds, setSelectedIds, setPersonas, upsertCustomPersona, startFreshDebate, chatSessions, debateSettings, setDebateSettings, setPersonaCoverOverrides, setPersonaAvatarOverrides, onOpenMobileNav }) {
             // Domain classification by persona id
             const DOMAIN_MAP = {
                 'krishnamurti': 'Philosophy', 'lacan': 'Philosophy', 'Simone de Beauvoir': 'Philosophy',
@@ -3072,8 +3108,13 @@
                     <!-- Masthead -->
                     <div class="w-full max-w-6xl mx-auto px-5 md:px-8 pt-6 md:pt-8 pb-1 md:pb-1">
                         <div class="flex items-baseline justify-between border-b border-on-surface/10 pb-2 gap-3">
+                            <button
+                                onClick=${() => onOpenMobileNav?.()}
+                                class="mobile-nav-trigger -my-1 -ml-1 w-8 h-8 rounded-md items-center justify-center text-on-surface-variant/70 hover:text-primary"
+                                aria-label="Open menu"
+                            ><span class="material-symbols-outlined" style=${{ fontSize: '20px' }}>menu</span></button>
                             <p class="text-[10px] text-on-surface-variant/50 uppercase tracking-[0.3em] font-bold whitespace-nowrap">${dayLabel}</p>
-                            <p class="text-[10px] text-on-surface-variant/50 uppercase tracking-[0.3em] whitespace-nowrap">${dateStr}</p>
+                            <p class="text-[10px] text-on-surface-variant/50 uppercase tracking-[0.3em] whitespace-nowrap hidden sm:block">${dateStr}</p>
                             <p class="text-[10px] text-on-surface-variant/50 uppercase tracking-[0.3em] whitespace-nowrap">${t('home.theCouncil')}</p>
                         </div>
                     </div>
@@ -4504,8 +4545,32 @@
             }, [user?.id, user?.user_metadata?.avatar_url]);
             const [sessionId, setSessionId] = useState(null);
             const [sidebarOpen, setSidebarOpen] = useState(true);
+            // 移动端抽屉：默认关；点左上角汉堡按钮打开。
+            // isMobile 用 matchMedia 监听 768 断点，渲染时决定走抽屉还是常规栏。
+            const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
+            const [mobileNavOpen, setMobileNavOpen] = useState(false);
+            useEffect(() => {
+                if (typeof window === 'undefined') return;
+                const mq = window.matchMedia('(max-width: 767px)');
+                const handler = (e) => setIsMobile(e.matches);
+                if (mq.addEventListener) mq.addEventListener('change', handler);
+                else mq.addListener(handler);
+                return () => {
+                    if (mq.removeEventListener) mq.removeEventListener('change', handler);
+                    else mq.removeListener(handler);
+                };
+            }, []);
             const [hasEnteredDebate, setHasEnteredDebate] = useState(false);
             useEffect(() => { if (view === 'debate') setHasEnteredDebate(true); }, [view]);
+            // 移动端：切换 view 或会话时自动收抽屉，避免遮住主内容。
+            useEffect(() => { setMobileNavOpen(false); }, [view, sessionId]);
+            // Esc 关抽屉
+            useEffect(() => {
+                if (!mobileNavOpen) return;
+                const onKey = (e) => { if (e.key === 'Escape') setMobileNavOpen(false); };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, [mobileNavOpen]);
             const [sessionMessages, setSessionMessages] = useState([]);
             const [sessionOptions, setSessionOptions] = useState([]);
             const [sessionRoadmap, setSessionRoadmap] = useState(null); // {nodes, walkedIds} | null
@@ -4889,6 +4954,7 @@
                     onOpenShare: openShare,
                     debateSettings,
                     setDebateSettings,
+                    onOpenMobileNav: () => setMobileNavOpen(true),
                 });
             };
 
@@ -4987,6 +5053,7 @@
                     setDebateSettings=${setDebateSettings}
                     setPersonaCoverOverrides=${setPersonaCoverOverrides}
                     setPersonaAvatarOverrides=${setPersonaAvatarOverrides}
+                    onOpenMobileNav=${() => setMobileNavOpen(true)}
                 />`;
             };
 
@@ -5001,6 +5068,15 @@
                         <div class="absolute top-1/2 right-0 w-64 h-64 rounded-full opacity-[0.03]"
                             style=${{ background: 'radial-gradient(circle, rgb(var(--color-tertiary)) 0%, transparent 70%)' }}></div>
                     </div>
+
+                    <!-- Mobile drawer backdrop —— 只在抽屉展开时显示，点击收起 -->
+                    ${isMobile && mobileNavOpen ? html`
+                        <div
+                            class="fixed inset-0 z-40 bg-black/55 backdrop-blur-[2px] md:hidden"
+                            onClick=${() => setMobileNavOpen(false)}
+                            aria-hidden="true"
+                        ></div>
+                    ` : null}
 
                     <!-- Sidebar -->
                     <${Sidebar}
@@ -5022,6 +5098,9 @@
                         userAvatar=${userAvatar}
                         sidebarOpen=${sidebarOpen}
                         setSidebarOpen=${setSidebarOpen}
+                        isMobile=${isMobile}
+                        mobileNavOpen=${mobileNavOpen}
+                        setMobileNavOpen=${setMobileNavOpen}
                         onOpenRedeem=${() => setRedeemOpen(true)}
                         onOpenFeedback=${() => setFeedbackOpen(true)}
                         themeMode=${themeMode}
