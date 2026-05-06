@@ -315,6 +315,7 @@
         const name = `${p.name || ''} ${p.role || ''}`.toLowerCase();
         if (id === 'seal-master' || /印占|vedic|seal/.test(name)) return 'seal';
         if (/八字|bazi|ba zi/.test(id + ' ' + name)) return 'bazi';
+        if (/紫微|紫薇|ziwei|zi wei|zi-wei/.test(id + ' ' + name)) return 'ziwei';
         if (/塔罗|tarot/.test(id + ' ' + name)) return 'tarot';
         return String(p.category || '').toUpperCase() === 'MYSTIC' ? 'seal' : null;
     };
@@ -326,6 +327,9 @@
         }
         if (method === 'bazi') {
             return /(出生|生日|birth|born|时辰|时间|time|地点|出生地|place)/i.test(s) && s.length > 40;
+        }
+        if (method === 'ziwei') {
+            return /(紫微|紫薇|命宫|身宫|迁移|官禄|财帛|夫妻|四化|chart|palace|birth|出生|截图)/i.test(s) && s.length > 40;
         }
         if (method === 'tarot') {
             return s.trim().length > 12;
@@ -368,6 +372,24 @@
                     `I am ${personaName || 'the Ba Zi reader'}. Ba Zi should be verified before a full reading.`,
                     `Please send: sex, Gregorian birth date, exact birth time, birthplace, the four pillars if already calculated, and the concrete question.`,
                     `Once the chart is verified, I will move into strength, useful elements, structure, luck cycles, family, career, marriage, wealth, health, and children prospects.`,
+                ].join('\n');
+        }
+        if (method === 'ziwei') {
+            return zh
+                ? [
+                    `我是${personaName || '紫微斗数师'}。紫微斗数要先定盘，盘错了后面全会偏。`,
+                    `请先发这些资料：`,
+                    `1. 性别。`,
+                    `2. 公历出生年月日、具体出生时间到分钟。`,
+                    `3. 出生地：国家/省/市/区。`,
+                    `4. 紫微斗数排盘截图，推荐用文墨天机等软件先排好。`,
+                    `5. 这次具体想问什么。`,
+                    `资料到齐后，我会先看命宫、身宫、主星、四化和三方四正，给你做 2-3 个可核验点；核对准了，再讲事业、财运、感情、家庭和迁移机会。`,
+                ].join('\n')
+                : [
+                    `I am ${personaName || 'the Zi Wei reader'}. Zi Wei Dou Shu needs the chart verified before a full reading.`,
+                    `Please send: sex, Gregorian birth date, exact birth time, birthplace, Zi Wei chart screenshot, and the concrete question.`,
+                    `Once verified, I will read the life, body, career, wealth, relationship, family, and migration palaces in practical language.`,
                 ].join('\n');
         }
         if (method === 'tarot') {

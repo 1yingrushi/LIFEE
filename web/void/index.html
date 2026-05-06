@@ -202,12 +202,12 @@
     <!-- 共享自 web/ui 的常量与 API helper（INITIAL_PERSONAS 等）。
          /constants.js、/api.js 之前能取到是因为根 mount 指向 web/ui，
          现在根换成 web/void 之后必须显式走 /ui/ 路径。 -->
-    <script src="/ui/constants.js?v=20260506-bazi-only"></script>
-    <script src="/ui/api.js?v=20260506-bazi-only"></script>
+    <script src="/ui/constants.js?v=20260506-ziwei-master"></script>
+    <script src="/ui/api.js?v=20260506-ziwei-master"></script>
 
     <!-- Void-specific component files -->
     <script src="./components/ui.js"></script>
-    <script src="./components/ChatArena.js?v=20260505-drop-rewalk"></script>
+    <script src="./components/ChatArena.js?v=20260506-ziwei-master"></script>
     <script src="./components/modals.js?v=20260430-mystic-png-avatars"></script>
     <script src="./components/PersonaRecommendModal.js?v=20260504-soul-split"></script>
 
@@ -672,6 +672,9 @@
             'home.mystic.bazi.title':   { en: 'Ba Zi', zh: '八字' },
             'home.mystic.bazi.desc':    { en: 'Look at timing, elements and rhythm from birth information.', zh: '从出生信息、五行与节律看当下处境。' },
             'home.mystic.bazi.placeholder': { en: 'Write your birth date, time, birthplace if known, and the question...', zh: '写下出生年月日、时辰、出生地（如知道）以及想问的问题……' },
+            'home.mystic.ziwei.title':  { en: 'Zi Wei', zh: '紫微' },
+            'home.mystic.ziwei.desc':   { en: 'Read life structure through palaces, stars and transformations.', zh: '用宫位、星曜与四化看人生结构。' },
+            'home.mystic.ziwei.placeholder': { en: 'Write your birth data, Zi Wei chart screenshot, and question...', zh: '写下出生资料、紫微排盘截图以及想问的问题……' },
             'home.mystic.tarot.title':  { en: 'Tarot', zh: '塔罗' },
             'home.mystic.tarot.desc':   { en: 'Use a symbolic spread to clarify tension, hidden influence and next step.', zh: '用牌阵看清张力、隐藏影响与下一步。' },
             'home.mystic.tarot.placeholder': { en: 'Write your question for the tarot reading...', zh: '写下你想让塔罗回应的问题……' },
@@ -2325,7 +2328,7 @@
             // Mystical sub-mode → persona auto-lock map. Currently only 印占
             // pins the 印占师 voice; 八字/塔罗 keep free selection until those
             // analyst personas are wired in.
-            const MYSTIC_LOCK_MAP = { seal: 'seal-master', bazi: 'bazi-master', tarot: 'tarot-reader' };
+            const MYSTIC_LOCK_MAP = { seal: 'seal-master', bazi: 'bazi-master', ziwei: 'ziwei-master', tarot: 'tarot-reader' };
 
             // Conversation mode (null = default multi-voice council)
             // 从 localStorage 读上次选择，仅认白名单值；未知值忽略，避免脏数据。
@@ -2416,6 +2419,20 @@
                         return /(出生|生日|birth|born|时辰|时间|time|地点|出生地|place)/i.test(s) && s.length > 25;
                     },
                 },
+                ziwei: {
+                    title: () => t('home.mystic.ziwei.title'),
+                    personaIds: ['ziwei-master', 'ziwei', 'zi-wei'],
+                    required: () => window.__lifeeLocale === 'zh'
+                        ? ['性别', '出生日期与具体时间', '出生地', '紫微斗数排盘截图', '你要问的具体问题']
+                        : ['Sex', 'Birth date and exact time', 'Birthplace', 'Zi Wei chart screenshot', 'Your concrete question'],
+                    template: () => window.__lifeeLocale === 'zh'
+                        ? '【紫微资料】\n1. 性别：\n2. 出生日期与具体时间：\n3. 出生地：\n4. 紫微排盘截图/盘面信息：\n5. 想问的问题：'
+                        : '[Zi Wei Material]\n1. Sex:\n2. Birth date and exact time:\n3. Birthplace:\n4. Zi Wei chart screenshot/chart data:\n5. Question:',
+                    isReady: (text) => {
+                        const s = text || '';
+                        return /(紫微|命宫|身宫|迁移|官禄|财帛|夫妻|四化|chart|palace|birth|出生|截图)/i.test(s) && s.length > 35;
+                    },
+                },
                 tarot: {
                     title: () => t('home.mystic.tarot.title'),
                     personaIds: ['tarot-reader', 'tarot'],
@@ -2437,6 +2454,7 @@
                     if ((cfg.personaIds || []).some(pid => pid.toLowerCase() === id)) return method;
                 }
                 if (/八字|bazi|ba zi/.test(name)) return 'bazi';
+                if (/紫微|紫薇|ziwei|zi wei|zi-wei/.test(name)) return 'ziwei';
                 if (/塔罗|tarot/.test(name)) return 'tarot';
                 if (/印占|vedic|seal/.test(name)) return 'seal';
                 return String(p.category || '').toUpperCase() === 'MYSTIC' ? 'seal' : null;
@@ -2987,6 +3005,7 @@
             const mysticOptions = [
                 { id: 'seal', icon: 'gesture' },
                 { id: 'bazi', icon: 'calendar_month' },
+                { id: 'ziwei', icon: 'auto_awesome' },
                 { id: 'tarot', icon: 'style' },
             ];
             const activeMystic = mysticOptions.find(item => item.id === mysticType);
