@@ -33,8 +33,8 @@ start "LIFEE backend" cmd /k "cd /d %~dp0 && uvicorn lifee.api:app --host 127.0.
 echo [LIFEE] Waiting 3s for server to boot...
 timeout /t 3 /nobreak >nul
 
-echo [LIFEE] Opening browser at http://localhost:8000/void/
-start "" "http://localhost:8000/void/"
+echo [LIFEE] Opening browser at http://localhost:8000/
+start "" "http://localhost:8000/"
 
 echo [LIFEE] Done. Close the backend window to stop.
 timeout /t 2 /nobreak >nul

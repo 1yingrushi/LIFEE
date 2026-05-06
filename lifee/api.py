@@ -519,8 +519,6 @@ def _match_role(persona_id: str, persona_name: str) -> Optional[str]:
 
 
 # 注：/ 直接由下方 StaticFiles 挂 web/void 处理（index.html via html=True）。
-# 之前是 307 重定向到 /void/，但既然 void 已经是主前端就没必要多一跳——
-# lifee.world 直接显示 void。/void/ 仍作为别名挂着，老链接不破。
 
 
 @app.get("/debug-env")
@@ -2510,14 +2508,13 @@ async def _stream_sse(moderator, participants, question, mod_module=None, origin
 
 
 # 静态文件：服务前端页面
-# / 直接服务 web/void（lifee.world 主前端）。/void/ 保留为别名让老链接不破。
+# / 直接服务 web/void（lifee.world 主前端）。
 # /ui/ 是队友在旧 UI 上做原型/视觉改版的旁路，不是公开入口。
 _web_void_dir = Path(__file__).parent.parent / "web" / "void"
 _web_ui_dir = Path(__file__).parent.parent / "web" / "ui"
 if _web_ui_dir.exists():
     app.mount("/ui", StaticFiles(directory=str(_web_ui_dir), html=True), name="ui-frontend")
 if _web_void_dir.exists():
-    app.mount("/void", StaticFiles(directory=str(_web_void_dir), html=True), name="void-alias")
     app.mount("/", StaticFiles(directory=str(_web_void_dir), html=True), name="frontend")
 
 
