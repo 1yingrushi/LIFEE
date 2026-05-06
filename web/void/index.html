@@ -1992,14 +1992,22 @@
         // ══════════════════════════════════════════════
         //  REDEEM MODAL — redeem a credit code
         // ══════════════════════════════════════════════
+        const CREDITS_PACKAGES = [
+            { credits: 25,  label_zh: 'LIFEE 25 积分',  label_en: 'LIFEE 25 Credits',  url: 'https://m.tb.cn/h.iC5g8eL?tk=0WEg5nF3hR9 MF287' },
+            { credits: 50,  label_zh: 'LIFEE 50 积分',  label_en: 'LIFEE 50 Credits',  url: 'https://m.tb.cn/h.iBenAft?tk=8lnf5nFh7Iw HU071' },
+            { credits: 100, label_zh: 'LIFEE 100 积分', label_en: 'LIFEE 100 Credits', url: 'https://m.tb.cn/h.iy0cwZB?tk=zw5z5nFSMCT MF278' },
+        ];
+
         function RedeemModal({ isOpen, onClose, user, reason }) {
             const [code, setCode]       = useState('');
             const [loading, setLoading] = useState(false);
             const [status, setStatus]   = useState('');
             const [statusKind, setStatusKind] = useState(''); // 'ok' | 'err'
+            const [showBuy, setShowBuy] = useState(false);
+            const locale = useLocale();
 
             useEffect(() => {
-                if (!isOpen) { setCode(''); setStatus(''); setStatusKind(''); }
+                if (!isOpen) { setCode(''); setStatus(''); setStatusKind(''); setShowBuy(false); }
             }, [isOpen]);
 
             if (!isOpen) return null;
@@ -2084,15 +2092,43 @@
                             class="w-full btn-gradient rounded-xl py-4 text-base font-semibold disabled:opacity-40"
                         >${loading ? t('redeem.redeeming') : t('redeem.action')}</button>
 
-                        <a
-                            href="https://m.tb.cn/h.iCcIFEV?tk=zgYE5NxUXJk CZ321"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold border border-outline/25 text-on-surface-variant/70 hover:text-on-surface hover:border-outline/50 hover:bg-surface-container/60 transition-all"
+                        <button
+                            onClick=${() => setShowBuy(true)}
+                            class="mt-3 w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold bg-white border border-outline/30 text-on-surface shadow-sm hover:shadow-md hover:border-primary/30 hover:text-primary transition-all"
                         >
                             <span class="material-symbols-outlined" style=${{ fontSize: '17px' }}>shopping_bag</span>
-                            ${window.__lifeeLocale === 'zh' ? '购买积分兑换码' : 'Buy Credits'}
-                        </a>
+                            ${locale === 'zh' ? '购买积分兑换码' : 'Buy Credits'}
+                        </button>
+
+                        ${showBuy ? html`
+                            <div class="fixed inset-0 z-[60] flex items-center justify-center" onClick=${(e) => { if (e.target === e.currentTarget) setShowBuy(false); }}>
+                                <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick=${() => setShowBuy(false)}></div>
+                                <div class="relative w-full max-w-sm mx-4 bg-white rounded-3xl p-8 shadow-2xl animate-in">
+                                    <button onClick=${() => setShowBuy(false)} class="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all">
+                                        <span class="material-symbols-outlined" style=${{ fontSize: '16px' }}>close</span>
+                                    </button>
+                                    <p class="text-[11px] text-center text-gray-400 mb-6 leading-relaxed">
+                                        We will make you happy, smart and rich.<br/>Hope your life gets better.
+                                    </p>
+                                    <div class="flex flex-col gap-3">
+                                        ${CREDITS_PACKAGES.map(pkg => html`
+                                            <a
+                                                key=${pkg.credits}
+                                                href=${pkg.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="flex items-center justify-between px-5 py-4 rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all group"
+                                            >
+                                                <span class="font-semibold text-gray-800 group-hover:text-blue-600 text-sm">
+                                                    ${locale === 'zh' ? pkg.label_zh : pkg.label_en}
+                                                </span>
+                                                <span class="material-symbols-outlined text-gray-400 group-hover:text-blue-500" style=${{ fontSize: '18px' }}>arrow_forward</span>
+                                            </a>
+                                        `)}
+                                    </div>
+                                </div>
+                            </div>
+                        ` : null}
                     </div>
                 </div>
             `;
