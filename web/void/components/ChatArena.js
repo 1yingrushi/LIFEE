@@ -1708,7 +1708,7 @@
                 const askParsed = parseWalk(m.text);
                 if (askParsed && (askParsed.outcome || askParsed.dilemma)) {
                     return html`
-                        <div key=${idx} class="flex items-start gap-4 max-w-[85%] md:max-w-[70%] ml-auto flex-row-reverse animate-in">
+                        <div key=${idx} class="flex items-start gap-3 md:gap-4 max-w-full md:max-w-[70%] ml-auto flex-row-reverse animate-in">
                             <div class="w-10 h-10 rounded-full border-2 border-on-surface-variant/30 bg-surface-container-high flex items-center justify-center text-on-surface font-bold text-sm shrink-0 overflow-hidden">
                                 ${!(typeof ava === 'string' && /^(https?:|\/|data:)/.test(ava))
                                     ? html`<span class="text-lg">${ava}</span>`
@@ -1725,7 +1725,7 @@
                     `;
                 }
                 return html`
-                    <div key=${idx} class="flex items-start gap-4 max-w-[85%] md:max-w-[70%] ml-auto flex-row-reverse animate-in">
+                    <div key=${idx} class="flex items-start gap-3 md:gap-4 max-w-full md:max-w-[70%] ml-auto flex-row-reverse animate-in">
                         <!-- Avatar -->
                         <div class="w-10 h-10 rounded-full border-2 border-on-surface-variant/30 bg-surface-container-high flex items-center justify-center text-on-surface font-bold text-sm shrink-0 overflow-hidden">
                             ${!(typeof ava === 'string' && /^(https?:|\/|data:)/.test(ava))
@@ -1736,7 +1736,7 @@
                         <!-- Bubble -->
                         <div class="space-y-1.5 items-end flex flex-col flex-1 min-w-0">
                             <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 mr-1">You</p>
-                            <div class="msg-bubble-bg no-shine bg-surface-container/80 backdrop-blur-md px-5 py-4 rounded-xl rounded-tr-sm text-on-surface shadow-sm leading-relaxed border-r-2 border-on-surface-variant/20 text-sm max-w-full">
+                            <div class="msg-bubble-bg no-shine bg-surface-container/80 backdrop-blur-md px-4 md:px-5 py-3 md:py-4 rounded-xl rounded-tr-sm text-on-surface shadow-sm leading-relaxed border-r-2 border-on-surface-variant/20 text-sm max-w-full">
                                 <p class="whitespace-pre-wrap break-words">${m.text || ''}</p>
                             </div>
                             <div class="flex gap-3 px-1 flex-row-reverse">
@@ -1757,7 +1757,7 @@
                 const color = getColor(m.personaId);
                 const ava = persona.avatar || '🃏';
                 return html`
-                    <div key=${idx} class="flex items-start gap-4 w-full pr-14 animate-in">
+                    <div key=${idx} class="flex items-start gap-3 md:gap-4 w-full pr-2 md:pr-14 animate-in">
                         <div
                             class="w-10 h-10 rounded-full border-2 flex items-center justify-center text-lg shrink-0 overflow-hidden"
                             style=${{ borderColor: color.ring, backgroundColor: color.bg }}
@@ -1919,7 +1919,7 @@
             const ava = persona.avatar || '☁️';
 
             return html`
-                <div key=${idx} class="flex items-start gap-4 w-full pr-14 animate-in">
+                <div key=${idx} class="flex items-start gap-3 md:gap-4 w-full pr-2 md:pr-14 animate-in">
                     <!-- Avatar -->
                     <div
                         class="w-10 h-10 rounded-full border-2 flex items-center justify-center text-lg shrink-0 overflow-hidden"
@@ -1936,7 +1936,7 @@
                             ${persona.name}
                         </p>
                         <div
-                            class="msg-bubble-bg no-shine bg-surface-container/80 backdrop-blur-md px-5 py-4 rounded-tl-none rounded-tr-xl rounded-br-xl rounded-bl-[2.5rem] text-on-surface shadow-sm leading-relaxed border-l-2 text-sm"
+                            class="msg-bubble-bg no-shine bg-surface-container/80 backdrop-blur-md px-4 md:px-5 py-3 md:py-4 rounded-tl-none rounded-tr-xl rounded-br-xl rounded-bl-[2.5rem] text-on-surface shadow-sm leading-relaxed border-l-2 text-sm"
                             style=${{ borderLeftColor: color.border }}
                         >
                             <${CharBlurText} text=${m.text || ''} />
@@ -3057,7 +3057,7 @@
                     class="flex-1 overflow-y-auto"
                     style=${{ scrollbarWidth: 'thin', scrollbarColor: 'rgb(var(--color-primary) / 0.35) transparent' }}
                 >
-                  <div class="max-w-5xl mx-auto w-full px-6 py-8 space-y-8">
+                  <div class="max-w-5xl mx-auto w-full px-3 md:px-6 py-6 md:py-8 space-y-6 md:space-y-8">
                     ${history.length === 0 && !isDebating ? html`
                         <div class="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-30 select-none">
                             <div class="text-4xl">✦</div>
@@ -3166,7 +3166,7 @@
                 </div>
 
                 <!-- ── Footer input area ── -->
-                <footer class="p-6 bg-surface-dim/40 backdrop-blur-2xl border-t border-outline/15 shrink-0">
+                <footer class="px-3 md:p-6 py-4 md:py-6 bg-surface-dim/40 backdrop-blur-2xl border-t border-outline/15 shrink-0">
                     <div class="max-w-5xl mx-auto space-y-3">
                         ${showScrollToBottom ? html`
                             <div class="flex justify-center pointer-events-none">
