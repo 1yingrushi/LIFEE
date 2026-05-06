@@ -6,18 +6,22 @@ Google Hackathon 2025 Project
 
 ## Two Ways to Use
 
-| | Web Demo | CLI |
+| | Web | CLI |
 |---|---------|-----|
-| **Setup** | Open `index.html` in browser | `pip install -r requirements.txt` |
-| **Backend** | Supabase + Cloudflare Workers | Local Python + LLM API |
+| **Setup** | Public URL (lifee.world) or self-host | `pip install -r requirements.txt` |
+| **Backend** | Aliyun ECS + nginx + uvicorn (Python) + SQLite | Local Python + LLM API |
 | **Features** | Full UI, community, persona builder | Terminal-based, knowledge base, skills |
 | **Best for** | Quick start, sharing | Deep customization, local roles |
 
 ---
 
-## Web Demo
+## Web
 
-A standalone single-page app — no server required, just open `index.html`.
+Production deployment runs on a single Aliyun ECS instance: nginx
+fronts uvicorn serving `lifee.api:app`, SQLite at
+`/opt/lifee/data/lifee.db`. The frontend (`web/void/`) is served as
+static files by the same FastAPI app at `/`. See
+`scripts/setup-server.sh` for a one-shot bootstrap on Ubuntu 24.04.
 
 ### Features
 
@@ -26,14 +30,15 @@ A standalone single-page app — no server required, just open `index.html`.
 - **Custom personas**: Create your own advisors with custom avatars and personality
 - **Chat history**: Auto-saved, exportable, shareable to community
 - **Community**: Browse shared conversations and personas
-- **Account system**: Sign up / sign in via Supabase auth
+- **Account system**: email + password via local FastAPI auth (`/auth/*`)
 
 ### Tech Stack
 
-- React 18 (CDN, no build step)
-- Tailwind CSS
-- Supabase (auth, database, storage)
-- LIFEE API on Cloudflare Workers (LLM calls)
+- Frontend: vanilla HTML / JS / Tailwind in `web/void/`, no build step
+- Backend: FastAPI (`lifee.api:app`) on Python 3.12
+- DB: SQLite (single file, WAL mode)
+- LLM: DeepSeek (`deepseek-chat`) via direct API call from the backend
+- Captcha: Cloudflare Turnstile (only used for sign-up rate limiting)
 
 ---
 

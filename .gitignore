@@ -62,3 +62,9 @@ _temp_pdf/
 
 # Playwright MCP
 .playwright-mcp/
+
+# Excalidraw MCP canvas server log
+excalidraw.log
+
+# 临时调试截图
+xianyu-listing.png

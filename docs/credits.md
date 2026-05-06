@@ -8,7 +8,7 @@
 | ------------------------- | ---------- | ---------- | -------- | ------------------------------------------------- |
 | `/decision` 普通圆桌      | 1 / 人 / 轮 | 每发言一次 | 否       | speakers × rounds 起跳就预检查                    |
 | `/decision` 联网搜索      | 2 / 人 / 轮 | 每发言一次 | 否       | `webSearch=true` 切到 `chat-web`                  |
-| `/followup`               | 1          | 预扣       | 是       | 单人追问                                          |
+| `/followup`               | 1          | 预扣       | 是       | Real Life 模式进对话前的 3 轮深挖问答（每轮 1cr）|
 | `/summarize`              | 1          | 预扣       | 是       | 对话总结                                          |
 | `/path-options`           | 2          | 预扣       | 是       | 生成 3 条 roadmap 分支                            |
 | `/simulate-path`          | 3          | 预扣       | 是       | "Walk this path"：返 outcome + 下一层 3 条新路径 |

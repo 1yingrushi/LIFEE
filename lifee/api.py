@@ -1,8 +1,4 @@
-"""LIFEE API — FastAPI wrapper for the CLI debate engine
-
-Exposes the same interface as the Cloudflare Worker so the existing
-frontend can connect directly.
-"""
+"""LIFEE API — FastAPI server backing the web frontend (web/void/)."""
 
 import asyncio
 import json
