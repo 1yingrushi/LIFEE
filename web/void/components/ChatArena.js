@@ -3166,7 +3166,7 @@
                 </div>
 
                 <!-- ── Footer input area ── -->
-                <footer class="px-3 md:p-6 py-4 md:py-6 bg-surface-dim/40 backdrop-blur-2xl border-t border-outline/15 shrink-0">
+                <footer class="px-3 md:p-6 py-4 md:py-6 pb-safe md:pb-6 bg-surface-dim/40 backdrop-blur-2xl border-t border-outline/15 shrink-0">
                     <div class="max-w-5xl mx-auto space-y-3">
                         ${showScrollToBottom ? html`
                             <div class="flex justify-center pointer-events-none">

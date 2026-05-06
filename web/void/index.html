@@ -207,12 +207,24 @@
 
     <!-- Void-specific component files -->
     <script src="./components/ui.js"></script>
-    <script src="./components/ChatArena.js?v=20260507-mobile-bubble-width"></script>
+    <script src="./components/ChatArena.js?v=20260507-mobile-dvh"></script>
     <script src="./components/modals.js?v=20260430-mystic-png-avatars"></script>
     <script src="./components/PersonaRecommendModal.js?v=20260504-soul-split"></script>
 
     <style>
         * { box-sizing: border-box; }
+
+        /* iOS / Android 浏览器的地址栏会占掉 100vh 一部分，导致底部输入框被吃掉。
+           换成动态可视高 dvh：浏览器收起/展开 chrome 时实际可视区会自动调。 */
+        @supports (height: 100dvh) {
+            html, body { height: 100dvh; }
+            .h-screen { height: 100dvh; }
+        }
+
+        /* iPhone 全面屏底部 home 指示条避让 */
+        .pb-safe {
+            padding-bottom: max(1rem, env(safe-area-inset-bottom));
+        }
 
         :root {
             color-scheme: dark;
@@ -2853,15 +2865,21 @@
             const SCROLL_DURATION = 300;
             const easeOut = (t) => 1 - Math.pow(1 - t, 3);  // cubic ease-out, matches Tailwind ease-out
             const scrollAnimRef = useRef(null);
-            const animateScrollTo = (top) => {
+            // 移动端用页面级滚动（HomeView root 才是 scroller），桌面端继续用 carousel 内部滚。
+            const getScroller = () => {
                 const el = carouselRef.current;
-                if (!el) return;
+                if (!el) return null;
+                return el.scrollHeight > el.clientHeight + 1 ? el : (el.closest('.overflow-y-auto') || el);
+            };
+            const animateScrollTo = (top) => {
+                const scroller = getScroller();
+                if (!scroller) return;
                 if (scrollAnimRef.current != null) cancelAnimationFrame(scrollAnimRef.current);
-                const startTop = el.scrollTop;
+                const startTop = scroller.scrollTop;
                 const startTime = performance.now();
                 const step = (now) => {
                     const t = Math.min(1, (now - startTime) / SCROLL_DURATION);
-                    el.scrollTop = startTop + (top - startTop) * easeOut(t);
+                    scroller.scrollTop = startTop + (top - startTop) * easeOut(t);
                     if (t < 1) scrollAnimRef.current = requestAnimationFrame(step);
                     else scrollAnimRef.current = null;
                 };
@@ -2872,10 +2890,23 @@
                 const el = carouselRef.current;
                 if (!el) return;
                 const clamped = Math.max(0, Math.min(activeDomains.length - 1, idx));
-                const target = sectionRefs.current[clamped]?.offsetTop ?? 0;
+                const sectionEl = sectionRefs.current[clamped];
+                if (!sectionEl) return;
+                const scroller = getScroller();
+                if (!scroller) return;
+                // 计算 section 相对 scroller 的偏移：carousel 内部滚时 sectionEl.offsetTop 即可；
+                // 页面级滚动时需要换算成相对 scroller 的位置。
+                let target;
+                if (scroller === el) {
+                    target = sectionEl.offsetTop;
+                } else {
+                    const sRect = scroller.getBoundingClientRect();
+                    const eRect = sectionEl.getBoundingClientRect();
+                    target = scroller.scrollTop + (eRect.top - sRect.top);
+                }
                 scrollLockRef.current = true;
-                setActiveDomainIdx(clamped);  // triggers height transition
-                animateScrollTo(target);       // synchronized RAF scroll
+                setActiveDomainIdx(clamped);
+                animateScrollTo(target);
                 setTimeout(() => { scrollLockRef.current = false; }, SCROLL_DURATION + 50);
             };
 
@@ -3104,7 +3135,7 @@
             })();
 
             return html`
-                <div class="animate-in flex flex-col w-full h-full overflow-hidden">
+                <div class="animate-in flex flex-col w-full h-full overflow-y-auto md:overflow-hidden">
                     <!-- Masthead -->
                     <div class="w-full max-w-6xl mx-auto px-5 md:px-8 pt-6 md:pt-8 pb-1 md:pb-1">
                         <div class="flex items-baseline justify-between border-b border-on-surface/10 pb-2 gap-3">
@@ -3120,11 +3151,11 @@
                     </div>
 
                     <!-- Hero: input area only (featured persona card 已移除) -->
-                    <section class="w-full max-w-6xl mx-auto px-5 md:px-8 pt-2 md:pt-3 pb-5">
+                    <section class="w-full max-w-6xl mx-auto px-4 md:px-8 pt-2 md:pt-3 pb-3 md:pb-5">
                         <!-- 输入区——大头像删除后输入区独占整行；"今日议题" 小字省了腾空间 -->
-                        <div class="flex flex-col justify-center gap-4">
+                        <div class="flex flex-col justify-center gap-2 md:gap-4">
                             <h1
-                                class="font-headline text-3xl md:text-5xl font-bold text-on-surface min-h-[68px] md:min-h-[112px] flex items-end"
+                                class="font-headline text-2xl md:text-5xl font-bold text-on-surface min-h-[44px] md:min-h-[112px] flex items-end"
                                 style=${{ lineHeight: window.__lifeeLocale === 'zh' ? 1.35 : 1.1 }}
                                 dangerouslySetInnerHTML=${{ __html: t('home.onYourMind') }}
                             ></h1>
@@ -3252,9 +3283,9 @@
                     </section>
 
                     <!-- Domain sections (editorial list style) -->
-                    <section class="flex-1 min-h-0 flex flex-col w-full max-w-6xl mx-auto px-8 pb-2">
+                    <section class="md:flex-1 md:min-h-0 flex flex-col w-full max-w-6xl mx-auto px-4 md:px-8 pb-2">
                         <!-- Domain directory — fixed top of carousel section -->
-                        <div class="shrink-0 flex items-center justify-start flex-wrap gap-x-8 gap-y-3 mb-0 -mx-8 px-8 pt-2.5 pb-2 bg-surface/90 backdrop-blur-xl">
+                        <div class="shrink-0 flex items-center justify-start flex-wrap gap-x-5 md:gap-x-8 gap-y-3 mb-0 -mx-4 md:-mx-8 px-4 md:px-8 pt-2.5 pb-2 bg-surface/90 backdrop-blur-xl">
                             ${activeDomains.map((domain, dIdx) => {
                                 const isActive = dIdx === activeDomainIdx;
                                 return html`
@@ -3270,8 +3301,9 @@
                             })}
                         </div>
 
-                        <!-- Vertical list — natural section heights avoid viewport-specific blank gaps. -->
-                        <div ref=${carouselRef} class="flex-1 min-h-0 relative overflow-y-auto no-scrollbar"
+                        <!-- Vertical list — natural section heights avoid viewport-specific blank gaps.
+                             Mobile: page-level scroll; ≥md keeps the carousel-only inner scroll. -->
+                        <div ref=${carouselRef} class="relative md:flex-1 md:min-h-0 md:overflow-y-auto md:no-scrollbar"
                              style=${{ scrollbarWidth: 'none' }}>
                             ${activeDomains.map((domain, dIdx, arr) => {
                                 const items = grouped[domain];
