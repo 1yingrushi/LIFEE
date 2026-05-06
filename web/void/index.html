@@ -2101,15 +2101,16 @@
                         </button>
 
                         ${showBuy ? html`
-                            <div class="fixed inset-0 z-[60] flex items-center justify-center" onClick=${(e) => { if (e.target === e.currentTarget) setShowBuy(false); }}>
+                            <div class="fixed inset-0 z-[60] flex items-center justify-center">
                                 <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick=${() => setShowBuy(false)}></div>
-                                <div class="relative w-full max-w-sm mx-4 bg-white rounded-3xl p-8 shadow-2xl animate-in">
+                                <div class="relative w-full max-w-sm mx-4 bg-white rounded-3xl p-8 overflow-hidden" style=${{ boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
                                     <button onClick=${() => setShowBuy(false)} class="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all">
                                         <span class="material-symbols-outlined" style=${{ fontSize: '16px' }}>close</span>
                                     </button>
-                                    <p class="text-[11px] text-center text-gray-400 mb-6 leading-relaxed">
-                                        We will make you happy, smart and rich.<br/>Hope your life gets better.
-                                    </p>
+                                    <div class="text-center mb-6">
+                                        <p class="text-[11px] text-gray-400 leading-relaxed">We will make you happy, smart and rich.</p>
+                                        <p class="text-[11px] text-gray-400 leading-relaxed">Hope your life gets better.</p>
+                                    </div>
                                     <div class="flex flex-col gap-3">
                                         ${CREDITS_PACKAGES.map(pkg => html`
                                             <a
