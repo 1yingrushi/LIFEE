@@ -300,6 +300,52 @@
         return { seed, spread: spreadKey, spread_name: spread.name, spread_name_en: spread.name_en || spread.name, question, time_factor: time.key, time_label: time.label, cards };
     };
 
+    const buildTarotChoiceDeck = (spreadKey, question = '') => {
+        const spread = TAROT_SPREADS[spreadKey] || TAROT_SPREADS.three;
+        const seed = randomSeed(question);
+        const rng = makeRng(seed);
+        const time = tarotTimeFactor();
+        const pool = TAROT_DECK.map(c => ({ ...c }));
+        const deckSize = Math.min(pool.length, Math.max(12, spread.positions.length * 4));
+        const deck = Array.from({ length: deckSize }).map((_, drawIdx) => {
+            const weights = pool.map(card => {
+                let w = 1;
+                if (time.boosted.includes('major') && card.is_major) w *= 1.08;
+                if (card.element && time.boosted.includes(card.element)) w *= 1.08;
+                return w;
+            });
+            const total = weights.reduce((a, b) => a + b, 0);
+            let r = rng() * total;
+            let idx = 0;
+            for (; idx < weights.length; idx++) {
+                r -= weights[idx];
+                if (r <= 0) break;
+            }
+            const card = pool.splice(Math.min(idx, pool.length - 1), 1)[0];
+            const upright = rng() < 0.6;
+            return {
+                drawId: `${seed}-${drawIdx}`,
+                card: card.name,
+                orientation: upright ? '正位' : '逆位',
+                orientation_en: upright ? 'upright' : 'reversed',
+                is_major: card.is_major,
+            };
+        });
+        return {
+            result: {
+                seed,
+                spread: spreadKey,
+                spread_name: spread.name,
+                spread_name_en: spread.name_en || spread.name,
+                question,
+                time_factor: time.key,
+                time_label: time.label,
+                cards: [],
+            },
+            deck,
+        };
+    };
+
     // ── Language detection ────────────────────────────────────────────────────
     const detectLang = (text) => {
         const ch = (text || '').trim()[0] || '';
@@ -2996,19 +3042,66 @@
 
         const TarotDrawOverlay = ({ invite }) => {
             const [result, setResult] = useState(null);
-            const [revealed, setRevealed] = useState({});
-            if (!invite) return null;
-            const spread = TAROT_SPREADS[invite.spread] || TAROT_SPREADS.three;
+            const [choiceDeck, setChoiceDeck] = useState([]);
+            const [chosenDeckIds, setChosenDeckIds] = useState([]);
+            const autoCompleteRef = useRef(false);
+            const spread = TAROT_SPREADS[invite?.spread] || TAROT_SPREADS.three;
             const cards = result?.cards || [];
-            const allRevealed = result && cards.length > 0 && cards.every((_, idx) => revealed[idx]);
+            const allSelected = result && cards.length === spread.positions.length;
+            const nextSlotIdx = Math.min(cards.length, spread.positions.length - 1);
             const startDraw = () => {
-                setResult(drawTarotSpread(invite.spread, invite.question || context?.situation || ''));
-                setRevealed({});
+                const draw = buildTarotChoiceDeck(invite.spread, invite.question || context?.situation || '');
+                autoCompleteRef.current = false;
+                setResult(draw.result);
+                setChoiceDeck(draw.deck);
+                setChosenDeckIds([]);
             };
-            const revealCard = (idx) => {
-                if (!result) return;
-                setRevealed(prev => ({ ...prev, [idx]: true }));
+            const pickCard = (deckCard) => {
+                if (!result || allSelected || chosenDeckIds.includes(deckCard.drawId)) return;
+                const pos = spread.positions[cards.length];
+                const selected = {
+                    ...deckCard,
+                    position: pos.name,
+                    position_en: pos.name_en || pos.name,
+                };
+                setChosenDeckIds(prev => [...prev, deckCard.drawId]);
+                setResult(prev => ({ ...prev, cards: [...(prev?.cards || []), selected] }));
             };
+            const slotStyle = (idx) => {
+                if (spread.positions.length === 5 && invite.spread === 'diamond') {
+                    const map = [
+                        { gridColumn: '2', gridRow: '1' },
+                        { gridColumn: '1', gridRow: '2' },
+                        { gridColumn: '3', gridRow: '2' },
+                        { gridColumn: '2', gridRow: '3' },
+                        { gridColumn: '2', gridRow: '2' },
+                    ];
+                    return map[idx] || {};
+                }
+                if (invite.spread === 'celtic') {
+                    const map = [
+                        { gridColumn: '2', gridRow: '2' },
+                        { gridColumn: '2', gridRow: '2', transform: 'rotate(90deg)' },
+                        { gridColumn: '2', gridRow: '1' },
+                        { gridColumn: '1', gridRow: '2' },
+                        { gridColumn: '2', gridRow: '3' },
+                        { gridColumn: '3', gridRow: '2' },
+                        { gridColumn: '5', gridRow: '4' },
+                        { gridColumn: '5', gridRow: '3' },
+                        { gridColumn: '5', gridRow: '2' },
+                        { gridColumn: '5', gridRow: '1' },
+                    ];
+                    return map[idx] || {};
+                }
+                return {};
+            };
+            useEffect(() => {
+                if (!allSelected || !result || autoCompleteRef.current) return;
+                autoCompleteRef.current = true;
+                const timer = setTimeout(() => completeTarotDraw(result), 750);
+                return () => clearTimeout(timer);
+            }, [allSelected, result]);
+            if (!invite) return null;
             return html`
                 <div class="fixed inset-0 z-[80] bg-surface text-on-surface flex flex-col animate-in">
                     <div class="px-6 md:px-10 py-5 border-b border-white/10 flex items-center justify-between shrink-0">
@@ -3029,7 +3122,9 @@
                             <div class="rounded-3xl border border-primary/20 bg-primary/[0.04] p-5 md:p-6">
                                 <p class="text-sm md:text-base italic text-on-surface/80 leading-relaxed">
                                     ${result
-                                        ? '牌已经洗好。请逐张点击翻开，留意哪一张让你停顿。'
+                                        ? allSelected
+                                            ? '牌阵已经完成，正在回到对话让塔罗师解读。'
+                                            : '牌已经洗好。请从下方牌列里选择让你停顿的牌，它会自动落到上方对应牌位。'
                                         : '请在心里默念你的问题。准备好后开始洗牌，系统会按牌阵抽取不重复的牌，并记录可复现的 seed。'}
                                 </p>
                                 ${result ? html`
@@ -3039,68 +3134,90 @@
                                 ` : null}
                             </div>
 
-                            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                                ${result ? cards.map((card, idx) => {
-                                    const isOpen = !!revealed[idx];
+                            <div class=${`mx-auto grid gap-3 md:gap-4 justify-center ${
+                                invite.spread === 'diamond'
+                                    ? 'grid-cols-3 grid-rows-3 max-w-xl'
+                                    : invite.spread === 'celtic'
+                                        ? 'grid-cols-5 grid-rows-4 max-w-5xl'
+                                        : 'grid-cols-[repeat(auto-fit,minmax(92px,112px))] max-w-5xl'
+                            }`}>
+                                ${spread.positions.map((pos, idx) => {
+                                    const card = cards[idx];
+                                    const isNext = result && idx === nextSlotIdx && !allSelected;
                                     return html`
-                                        <button
+                                        <div
                                             key=${idx}
-                                            onClick=${() => revealCard(idx)}
-                                            class=${`no-shine group text-left min-h-[260px] rounded-3xl border transition-all overflow-hidden ${
-                                                isOpen
+                                            style=${slotStyle(idx)}
+                                            class=${`min-h-[150px] md:min-h-[178px] rounded-3xl border p-3 md:p-4 flex flex-col justify-between transition-all ${
+                                                card
                                                     ? 'border-primary/45 bg-surface-container shadow-lg shadow-primary/10'
-                                                    : 'border-white/10 bg-surface-container-low hover:border-primary/35'
+                                                    : isNext
+                                                        ? 'border-dashed border-primary/60 bg-primary/[0.06]'
+                                                        : 'border-dashed border-white/18 bg-surface-container-low/50 opacity-65'
                                             }`}
                                         >
-                                            <div class="h-full p-5 flex flex-col justify-between">
-                                                <div class="flex items-center justify-between">
-                                                    <span class="text-[10px] uppercase tracking-[0.25em] text-primary/70 font-black">${idx + 1}. ${card.position}</span>
-                                                    <span class="material-symbols-outlined text-primary/50" style=${{ fontSize: '18px' }}>${isOpen ? 'visibility' : 'style'}</span>
+                                            <span class="text-[9px] uppercase tracking-[0.22em] text-primary/70 font-black">${idx + 1}. ${pos.name}</span>
+                                            ${card ? html`
+                                                <div class="text-center py-3">
+                                                    <div class="text-2xl mb-2">${card.is_major ? '✦' : '◆'}</div>
+                                                    <h3 class="font-headline text-sm md:text-base font-bold text-on-surface leading-tight">${card.card}</h3>
+                                                    <p class="text-[10px] uppercase tracking-[0.22em] text-primary mt-2">${card.orientation}</p>
                                                 </div>
-                                                ${isOpen ? html`
-                                                    <div class="text-center py-8">
-                                                        <div class="text-3xl mb-4">${card.is_major ? '✦' : '◆'}</div>
-                                                        <h3 class="font-headline text-xl font-bold text-on-surface">${card.card}</h3>
-                                                        <p class="text-xs uppercase tracking-[0.25em] text-primary mt-3">${card.orientation}</p>
-                                                        <p class="text-[10px] text-on-surface-variant/45 mt-2">${card.is_major ? 'Major Arcana' : 'Minor Arcana'}</p>
-                                                    </div>
-                                                ` : html`
-                                                    <div class="text-center py-8 opacity-70">
-                                                        <div class="w-20 h-32 mx-auto rounded-2xl border border-primary/25 bg-primary/[0.06] flex items-center justify-center">
-                                                            <span class="material-symbols-outlined text-primary/50" style=${{ fontSize: '28px' }}>auto_awesome</span>
-                                                        </div>
-                                                        <p class="text-xs text-on-surface-variant/55 mt-5">点击翻牌</p>
-                                                    </div>
-                                                `}
-                                                <div class="text-[10px] text-on-surface-variant/40 leading-relaxed">
-                                                    ${isOpen ? '这张牌会作为塔罗师解读的一部分。' : '保持问题在心里，然后翻开。'}
+                                            ` : html`
+                                                <div class="mx-auto w-14 h-24 md:w-16 md:h-24 rounded-2xl border border-dashed border-white/25 flex items-center justify-center text-on-surface-variant/35">
+                                                    <span class="material-symbols-outlined" style=${{ fontSize: '22px' }}>add</span>
                                                 </div>
-                                            </div>
-                                        </button>
+                                            `}
+                                            <p class="text-[10px] text-center text-on-surface-variant/40">${card ? '已入位' : (isNext ? '下一张牌' : '等待选择')}</p>
+                                        </div>
                                     `;
-                                }) : spread.positions.map((pos, idx) => html`
-                                    <div key=${idx} class="min-h-[220px] rounded-3xl border border-white/10 bg-surface-container-low p-5 flex flex-col justify-between opacity-55">
-                                        <span class="text-[10px] uppercase tracking-[0.25em] text-primary/70 font-black">${idx + 1}. ${pos.name}</span>
-                                        <div class="w-16 h-24 mx-auto rounded-2xl border border-white/10 bg-surface-container"></div>
-                                        <p class="text-xs text-center text-on-surface-variant/45">等待洗牌</p>
-                                    </div>
-                                `)}
+                                })}
                             </div>
+
+                            ${result ? html`
+                                <div class="rounded-3xl border border-white/10 bg-surface-container-low/80 p-5 overflow-hidden">
+                                    <div class="flex items-center justify-between gap-4 mb-4">
+                                        <div>
+                                            <p class="text-[10px] uppercase tracking-[0.3em] text-primary/75 font-black">Choose Cards</p>
+                                            <p class="text-xs text-on-surface-variant/55 mt-1">悬停牌面会浮起，点击后放入上方牌阵。</p>
+                                        </div>
+                                        <p class="text-xs text-on-surface-variant/45">${cards.length}/${spread.positions.length}</p>
+                                    </div>
+                                    <div class="flex gap-3 overflow-x-auto no-scrollbar pt-5 pb-2 px-1">
+                                        ${choiceDeck.map((deckCard, idx) => {
+                                            const chosen = chosenDeckIds.includes(deckCard.drawId);
+                                            return html`
+                                                <button
+                                                    key=${deckCard.drawId}
+                                                    disabled=${chosen || allSelected}
+                                                    onClick=${() => pickCard(deckCard)}
+                                                    class=${`no-shine shrink-0 w-16 md:w-20 h-28 md:h-32 rounded-2xl border transition-all duration-200 ${
+                                                        chosen
+                                                            ? 'border-primary/20 bg-primary/[0.03] opacity-25 translate-y-2'
+                                                            : 'border-primary/25 bg-[radial-gradient(circle_at_50%_25%,rgba(232,168,76,0.18),rgba(21,20,18,0.98)_58%)] hover:-translate-y-5 hover:border-primary/70 hover:shadow-xl hover:shadow-primary/15'
+                                                    }`}
+                                                    title=${chosen ? '已选择' : `选择第 ${idx + 1} 张`}
+                                                >
+                                                    <span class="block h-full rounded-2xl border border-white/[0.06] m-1 flex items-center justify-center">
+                                                        <span class="material-symbols-outlined text-primary/60" style=${{ fontSize: '24px' }}>auto_awesome</span>
+                                                    </span>
+                                                </button>
+                                            `;
+                                        })}
+                                    </div>
+                                </div>
+                            ` : null}
 
                             <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pb-8">
                                 <button
                                     onClick=${startDraw}
                                     class="btn-gradient px-8 py-4 rounded-full text-xs font-black uppercase tracking-[0.25em]"
                                 >${result ? '重新洗牌' : '开始洗牌'}</button>
-                                <button
-                                    disabled=${!allRevealed}
-                                    onClick=${() => completeTarotDraw(result)}
-                                    class=${`px-8 py-4 rounded-full text-xs font-black uppercase tracking-[0.25em] border transition-all ${
-                                        allRevealed
-                                            ? 'border-primary/50 text-primary hover:bg-primary/10'
-                                            : 'border-white/10 text-on-surface-variant/30 cursor-not-allowed'
-                                    }`}
-                                >回到对话解读</button>
+                                ${allSelected ? html`
+                                    <span class="px-8 py-4 rounded-full text-xs font-black uppercase tracking-[0.25em] border border-primary/40 text-primary bg-primary/10">
+                                        正在回到对话…
+                                    </span>
+                                ` : null}
                             </div>
                         </div>
                     </div>
