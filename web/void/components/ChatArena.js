@@ -1447,29 +1447,6 @@
                 }));
                 setPathOptions(prev => [...prev, consequenceNode, ...children]);
                 setWalkedPathIds(prev => new Set([...prev, node.id]));
-                // 把这次 walk 也写进对话历史（personaId='lifee-roadmap'，role='user'）。
-                // 本地乐观插入 + 后端 /note 持久化。下次刷新这条记录还在。
-                const noteParts = [`📍 假设我走了「${node.label}」。`];
-                if (outcome) noteParts.push(`后来：${outcome}`);
-                if (dilemma) noteParts.push(`现在的问题是：${dilemma}`);
-                const noteText = noteParts.join('\n\n');
-                setHistory(prev => {
-                    const maxSeq = prev.reduce((m, x) => (typeof x.seq === 'number' && x.seq > m ? x.seq : m), 0);
-                    return [...prev, { personaId: 'lifee-roadmap', text: noteText, seq: maxSeq + 1 }];
-                });
-                const sid = sessionIdRef.current;
-                if (sid) {
-                    window.fetch(`/sessions/${encodeURIComponent(sid)}/note`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                            role: 'user',
-                            content: noteText,
-                            persona_id: 'lifee-roadmap',
-                        }),
-                    }).catch(() => {});
-                }
             } catch (e) {
                 setPathError(e?.message || 'Simulate failed');
                 setTimeout(() => setPathError(''), 4000);
