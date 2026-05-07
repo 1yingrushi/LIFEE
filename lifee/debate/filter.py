@@ -3,6 +3,8 @@
 
 在流式输出时过滤格式泄露（如 <msg from="...">、</msg>、--- 等）
 """
+from __future__ import annotations
+
 import re
 from typing import List
 

@@ -1,6 +1,8 @@
 """
 辩论主持者 - 调度辩论流程
 """
+from __future__ import annotations
+
 import asyncio
 import random
 import re

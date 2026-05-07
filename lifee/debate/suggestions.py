@@ -1,6 +1,8 @@
 """
 建议回复生成器 - 根据讨论内容生成用户可能的回复建议
 """
+from __future__ import annotations
+
 import json
 import re
 from typing import List
