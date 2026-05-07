@@ -481,6 +481,7 @@
         initialMode = null,
         onSessionCreated,
         onOpenShare,
+        onStartNewConversation,
         debateSettings,
         setDebateSettings,
         onOpenMobileNav,
@@ -1072,6 +1073,19 @@
                     credentials: 'include',
                 });
             } catch (_) {}
+        };
+
+        const handleStartNewConversation = async () => {
+            if (!onStartNewConversation) return;
+            setShowMoreMenu(false);
+            setShowVoiceMap(false);
+            if (isDebating) await handleStop();
+            setTarotDraw(null);
+            setInputValue('');
+            if (inputFieldRef.current) {
+                inputFieldRef.current.style.height = 'auto';
+            }
+            try { onStartNewConversation(); } catch (_) {}
         };
 
         // ── Core round runner ─────────────────────────────────────────────────
@@ -3344,6 +3358,15 @@
                         ` : null}
 
                         <div class="flex items-center gap-4 text-on-surface-variant/60">
+                            <!-- New conversation -->
+                            ${onStartNewConversation ? html`
+                                <span
+                                    class="material-symbols-outlined cursor-pointer transition-colors hover:text-primary"
+                                    title=${t('chat.newConversation')}
+                                    onClick=${handleStartNewConversation}
+                                >edit_square</span>
+                            ` : null}
+
                             <!-- Voice Map -->
                             <span
                                 class=${'material-symbols-outlined cursor-pointer transition-colors ' + ((selectedPersonas || []).length === 0 ? 'opacity-30 pointer-events-none' : 'hover:text-primary') + (showVoiceMap ? ' text-primary' : '')}

@@ -207,7 +207,7 @@
 
     <!-- Void-specific component files -->
     <script src="./components/ui.js"></script>
-    <script src="./components/ChatArena.js?v=20260507-tarot-deck-fan"></script>
+    <script src="./components/ChatArena.js?v=20260507-new-conversation-btn"></script>
     <script src="./components/modals.js?v=20260430-mystic-png-avatars"></script>
     <script src="./components/PersonaRecommendModal.js?v=20260504-soul-split"></script>
 
@@ -756,6 +756,7 @@
             'chat.voiceMap':     { en: 'Voice Archive', zh: '声音档案' },
             'chat.reset':        { en: 'Fit',           zh: '适配' },
             'chat.close':        { en: 'Close',         zh: '关闭' },
+            'chat.newConversation': { en: 'New conversation', zh: '新对话' },
             'chat.webSearch':    { en: 'Web Search',    zh: '联网搜索' },
             'chat.webSearchDesc': { en: 'Ground answers in live web results · +1 credit per turn', zh: '基于实时网络搜索结果 · 每轮 +1 credit' },
             'chat.followUp':     { en: 'Follow-up Questions', zh: '追问' },
@@ -4860,6 +4861,18 @@
                 setView('debate');
             }, []);
 
+            /** 圆桌内「新对话」：清空当前会话与首页情境，保留已选角色。 */
+            const startNewConversation = useCallback(() => {
+                setInitialMode(null);
+                setSessionId(null);
+                setSessionMessages([]);
+                setSessionSummaries([]);
+                setSessionOptions([]);
+                setSessionRoadmap(null);
+                setContext({ situation: '', landingPeriods: [] });
+                setView('debate');
+            }, []);
+
             const handleSignOut = useCallback(async () => {
                 await supabaseClient.auth.signOut();
                 setUser(null);
@@ -4941,6 +4954,7 @@
                     debateSettings,
                     setDebateSettings,
                     onOpenMobileNav: () => setMobileNavOpen(true),
+                    onStartNewConversation: startNewConversation,
                 });
             };
 
