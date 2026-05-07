@@ -306,7 +306,7 @@
         const rng = makeRng(seed);
         const time = tarotTimeFactor();
         const pool = TAROT_DECK.map(c => ({ ...c }));
-        const deckSize = Math.min(pool.length, Math.max(12, spread.positions.length * 4));
+        const deckSize = pool.length;
         const deck = Array.from({ length: deckSize }).map((_, drawIdx) => {
             const weights = pool.map(card => {
                 let w = 1;
@@ -3068,28 +3068,38 @@
                 setResult(prev => ({ ...prev, cards: [...(prev?.cards || []), selected] }));
             };
             const slotStyle = (idx) => {
-                if (spread.positions.length === 5 && invite.spread === 'diamond') {
+                if (invite.spread === 'diamond') {
                     const map = [
                         { gridColumn: '2', gridRow: '1' },
                         { gridColumn: '1', gridRow: '2' },
+                        { gridColumn: '2', gridRow: '2' },
                         { gridColumn: '3', gridRow: '2' },
                         { gridColumn: '2', gridRow: '3' },
-                        { gridColumn: '2', gridRow: '2' },
                     ];
                     return map[idx] || {};
                 }
                 if (invite.spread === 'celtic') {
+                    // 4 cols x 4 rows. 0/1 在中央并排（替代真正的交叉，视觉更干净）
                     const map = [
-                        { gridColumn: '2', gridRow: '2' },
-                        { gridColumn: '2', gridRow: '2', transform: 'rotate(90deg)' },
+                        { gridColumn: '2', gridRow: '2' },          // 0 Present
+                        { gridColumn: '3', gridRow: '2' },          // 1 Challenge
+                        { gridColumn: '2 / span 2', gridRow: '1' }, // 2 Goal (top)
+                        { gridColumn: '2 / span 2', gridRow: '3' }, // 3 Foundation (bottom)
+                        { gridColumn: '1', gridRow: '2' },          // 4 Recent Past (left)
+                        { gridColumn: '1', gridRow: '3' },          // 5 Near Future (left bottom)
+                        { gridColumn: '4', gridRow: '4' },          // 6 Self
+                        { gridColumn: '4', gridRow: '3' },          // 7 Environment
+                        { gridColumn: '4', gridRow: '2' },          // 8 Hopes & Fears
+                        { gridColumn: '4', gridRow: '1' },          // 9 Outcome
+                    ];
+                    return map[idx] || {};
+                }
+                if (invite.spread === 'moon') {
+                    const map = [
+                        { gridColumn: '1', gridRow: '1' },
                         { gridColumn: '2', gridRow: '1' },
                         { gridColumn: '1', gridRow: '2' },
-                        { gridColumn: '2', gridRow: '3' },
-                        { gridColumn: '3', gridRow: '2' },
-                        { gridColumn: '5', gridRow: '4' },
-                        { gridColumn: '5', gridRow: '3' },
-                        { gridColumn: '5', gridRow: '2' },
-                        { gridColumn: '5', gridRow: '1' },
+                        { gridColumn: '2', gridRow: '2' },
                     ];
                     return map[idx] || {};
                 }
@@ -3102,9 +3112,24 @@
                 return () => clearTimeout(timer);
             }, [allSelected, result]);
             if (!invite) return null;
+            // Tarot 牌共有的尺寸（5:8 比例，接近真实塔罗）
+            const CARD_W = 88;   // px
+            const CARD_H = 140;
+            const SLOT_W = 96;
+            const SLOT_H = 152;
+            const CARD_BACK_BG = 'radial-gradient(circle at 50% 32%, rgba(232,168,76,0.45), transparent 52%), conic-gradient(from 45deg at 50% 50%, rgba(232,168,76,0.16) 0deg, transparent 60deg, rgba(232,168,76,0.18) 120deg, transparent 180deg, rgba(232,168,76,0.16) 240deg, transparent 300deg), linear-gradient(150deg, #1a1714 0%, #2a2521 50%, #15110d 100%)';
+
+            const slotsLayoutClass = (() => {
+                if (invite.spread === 'diamond') return 'grid grid-cols-3 grid-rows-3 max-w-md';
+                if (invite.spread === 'celtic') return 'grid grid-cols-4 grid-rows-4 max-w-2xl';
+                if (invite.spread === 'moon') return 'grid grid-cols-2 grid-rows-2 max-w-sm';
+                return 'flex flex-wrap justify-center';
+            })();
+
             return html`
-                <div class="fixed inset-0 z-[80] bg-surface text-on-surface flex flex-col animate-in">
-                    <div class="px-6 md:px-10 py-5 border-b border-white/10 flex items-center justify-between shrink-0">
+                <div class="fixed inset-0 z-[80] text-on-surface flex flex-col animate-in"
+                     style=${{ background: 'radial-gradient(circle at 50% 0%, rgba(232,168,76,0.06), transparent 55%), #0c0a08' }}>
+                    <div class="px-6 md:px-10 py-5 border-b border-primary/10 flex items-center justify-between shrink-0">
                         <div>
                             <p class="text-[10px] uppercase tracking-[0.35em] text-primary font-black mb-1">Tarot Draw</p>
                             <h2 class="font-headline text-2xl md:text-4xl font-bold">${spread.name}</h2>
@@ -3117,104 +3142,136 @@
                             <span class="material-symbols-outlined" style=${{ fontSize: '20px' }}>close</span>
                         </button>
                     </div>
-                    <div class="flex-1 overflow-y-auto no-scrollbar px-6 md:px-10 py-8">
-                        <div class="max-w-6xl mx-auto space-y-8">
-                            <div class="rounded-3xl border border-primary/20 bg-primary/[0.04] p-5 md:p-6">
-                                <p class="text-sm md:text-base italic text-on-surface/80 leading-relaxed">
+
+                    <div class="flex-1 overflow-y-auto no-scrollbar">
+                        <div class="max-w-6xl mx-auto px-6 md:px-10 py-8 space-y-8">
+                            <!-- 提示条 -->
+                            <div class="rounded-2xl border border-primary/20 bg-primary/[0.04] px-5 py-4 flex items-center justify-between gap-4">
+                                <p class="text-sm italic text-on-surface/80 leading-relaxed">
                                     ${result
                                         ? allSelected
                                             ? '牌阵已经完成，正在回到对话让塔罗师解读。'
-                                            : '牌已经洗好。请从下方牌列里选择让你停顿的牌，它会自动落到上方对应牌位。'
-                                        : '请在心里默念你的问题。准备好后开始洗牌，系统会按牌阵抽取不重复的牌，并记录可复现的 seed。'}
+                                            : `请从下方 78 张牌中，凭直觉选 ${spread.positions.length} 张。`
+                                        : '请在心里默念你的问题，准备好后开始洗牌。'}
                                 </p>
                                 ${result ? html`
-                                    <p class="text-[10px] uppercase tracking-[0.25em] text-primary/75 mt-3">
+                                    <p class="text-[10px] uppercase tracking-[0.25em] text-primary/75 whitespace-nowrap">
                                         Seed ${result.seed} · ${result.time_label}
                                     </p>
                                 ` : null}
                             </div>
 
-                            <div class=${`mx-auto grid gap-3 md:gap-4 justify-center ${
-                                invite.spread === 'diamond'
-                                    ? 'grid-cols-3 grid-rows-3 max-w-xl'
-                                    : invite.spread === 'celtic'
-                                        ? 'grid-cols-5 grid-rows-4 max-w-5xl'
-                                        : 'grid-cols-[repeat(auto-fit,minmax(92px,112px))] max-w-5xl'
-                            }`}>
-                                ${spread.positions.map((pos, idx) => {
-                                    const card = cards[idx];
-                                    const isNext = result && idx === nextSlotIdx && !allSelected;
-                                    return html`
-                                        <div
-                                            key=${idx}
-                                            style=${slotStyle(idx)}
-                                            class=${`min-h-[150px] md:min-h-[178px] rounded-3xl border p-3 md:p-4 flex flex-col justify-between transition-all ${
-                                                card
-                                                    ? 'border-primary/45 bg-surface-container shadow-lg shadow-primary/10'
-                                                    : isNext
-                                                        ? 'border-dashed border-primary/60 bg-primary/[0.06]'
-                                                        : 'border-dashed border-white/18 bg-surface-container-low/50 opacity-65'
-                                            }`}
-                                        >
-                                            <span class="text-[9px] uppercase tracking-[0.22em] text-primary/70 font-black">${idx + 1}. ${pos.name}</span>
-                                            ${card ? html`
-                                                <div class="text-center py-3">
-                                                    <div class="text-2xl mb-2">${card.is_major ? '✦' : '◆'}</div>
-                                                    <h3 class="font-headline text-sm md:text-base font-bold text-on-surface leading-tight">${card.card}</h3>
-                                                    <p class="text-[10px] uppercase tracking-[0.22em] text-primary mt-2">${card.orientation}</p>
+                            <!-- 牌阵槽位 -->
+                            <div class="rounded-3xl border border-primary/15 bg-black/30 p-6 md:p-8 flex justify-center">
+                                <div class=${`mx-auto gap-4 md:gap-6 justify-items-center items-end ${slotsLayoutClass}`}>
+                                    ${spread.positions.map((pos, idx) => {
+                                        const card = cards[idx];
+                                        const isNext = result && idx === nextSlotIdx && !allSelected;
+                                        return html`
+                                            <div key=${idx} style=${slotStyle(idx)} class="flex flex-col items-center gap-2">
+                                                <span class=${`text-[10px] uppercase tracking-[0.28em] font-black ${isNext ? 'text-primary' : 'text-on-surface-variant/55'}`}>
+                                                    ${idx + 1}. ${pos.name}
+                                                </span>
+                                                <div
+                                                    class=${`relative rounded-xl overflow-hidden transition-all duration-300 ${
+                                                        card
+                                                            ? 'border border-primary/55 shadow-[0_18px_50px_-25px_rgba(232,168,76,0.85)]'
+                                                            : isNext
+                                                                ? 'border-2 border-dashed border-primary/70 bg-primary/[0.05] animate-pulse'
+                                                                : 'border-2 border-dashed border-white/12 bg-white/[0.02]'
+                                                    }`}
+                                                    style=${{ width: SLOT_W + 'px', height: SLOT_H + 'px' }}
+                                                >
+                                                    ${card ? html`
+                                                        <div class="absolute inset-0 flex flex-col items-center justify-between py-4 px-2"
+                                                             style=${{ background: 'linear-gradient(160deg, #1f1a15 0%, #2c241c 50%, #16110c 100%)' }}>
+                                                            <span class=${`text-[9px] uppercase tracking-[0.28em] font-black ${card.is_major ? 'text-primary' : 'text-on-surface-variant/55'}`}>
+                                                                ${card.is_major ? 'Major' : 'Minor'}
+                                                            </span>
+                                                            <div class="text-center">
+                                                                <div class=${`text-2xl mb-1 ${card.is_major ? 'text-primary' : 'text-on-surface/80'}`}>
+                                                                    ${card.is_major ? '✦' : '◆'}
+                                                                </div>
+                                                                <h3 class="font-headline text-[13px] font-bold text-on-surface leading-tight px-1">
+                                                                    ${card.card}
+                                                                </h3>
+                                                            </div>
+                                                            <p class="text-[9px] uppercase tracking-[0.28em] text-primary/85 font-black">
+                                                                ${card.orientation}
+                                                            </p>
+                                                        </div>
+                                                    ` : html`
+                                                        <div class="absolute inset-0 flex items-center justify-center text-on-surface-variant/25">
+                                                            <span class="material-symbols-outlined" style=${{ fontSize: '26px' }}>auto_awesome</span>
+                                                        </div>
+                                                    `}
                                                 </div>
-                                            ` : html`
-                                                <div class="mx-auto w-14 h-24 md:w-16 md:h-24 rounded-2xl border border-dashed border-white/25 flex items-center justify-center text-on-surface-variant/35">
-                                                    <span class="material-symbols-outlined" style=${{ fontSize: '22px' }}>add</span>
-                                                </div>
-                                            `}
-                                            <p class="text-[10px] text-center text-on-surface-variant/40">${card ? '已入位' : (isNext ? '下一张牌' : '等待选择')}</p>
-                                        </div>
-                                    `;
-                                })}
+                                            </div>
+                                        `;
+                                    })}
+                                </div>
                             </div>
 
+                            <!-- 选牌区 -->
                             ${result ? html`
-                                <div class="rounded-3xl border border-white/10 bg-surface-container-low/80 p-5 overflow-hidden">
-                                    <div class="flex items-center justify-between gap-4 mb-4">
+                                <div class="rounded-3xl border border-primary/15 bg-black/30 p-5 md:p-6">
+                                    <div class="flex items-center justify-between gap-4 mb-3">
                                         <div>
-                                            <p class="text-[10px] uppercase tracking-[0.3em] text-primary/75 font-black">Choose Cards</p>
-                                            <p class="text-xs text-on-surface-variant/55 mt-1">悬停牌面会浮起，点击后放入上方牌阵。</p>
+                                            <p class="text-[10px] uppercase tracking-[0.3em] text-primary/85 font-black">Choose Cards</p>
+                                            <p class="text-xs text-on-surface-variant/55 mt-1">悬停牌面会浮起，点击后落入上方对应牌位。</p>
                                         </div>
-                                        <p class="text-xs text-on-surface-variant/45">${cards.length}/${spread.positions.length}</p>
+                                        <p class="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant/65 font-black">
+                                            ${cards.length} / ${spread.positions.length}
+                                        </p>
                                     </div>
-                                    <div class="flex gap-3 overflow-x-auto no-scrollbar pt-5 pb-2 px-1">
-                                        ${choiceDeck.map((deckCard, idx) => {
-                                            const chosen = chosenDeckIds.includes(deckCard.drawId);
-                                            return html`
-                                                <button
-                                                    key=${deckCard.drawId}
-                                                    disabled=${chosen || allSelected}
-                                                    onClick=${() => pickCard(deckCard)}
-                                                    class=${`no-shine shrink-0 w-16 md:w-20 h-28 md:h-32 rounded-2xl border transition-all duration-200 ${
-                                                        chosen
-                                                            ? 'border-primary/20 bg-primary/[0.03] opacity-25 translate-y-2'
-                                                            : 'border-primary/25 bg-[radial-gradient(circle_at_50%_25%,rgba(232,168,76,0.18),rgba(21,20,18,0.98)_58%)] hover:-translate-y-5 hover:border-primary/70 hover:shadow-xl hover:shadow-primary/15'
-                                                    }`}
-                                                    title=${chosen ? '已选择' : `选择第 ${idx + 1} 张`}
-                                                >
-                                                    <span class="block h-full rounded-2xl border border-white/[0.06] m-1 flex items-center justify-center">
-                                                        <span class="material-symbols-outlined text-primary/60" style=${{ fontSize: '24px' }}>auto_awesome</span>
-                                                    </span>
-                                                </button>
-                                            `;
-                                        })}
+                                    <div class="overflow-x-auto no-scrollbar pt-12 pb-3 px-2"
+                                         style=${{ scrollbarWidth: 'none' }}>
+                                        <div class="flex items-end justify-start mx-auto"
+                                             style=${{ minWidth: 'min-content' }}>
+                                            ${choiceDeck.map((deckCard, idx) => {
+                                                const chosen = chosenDeckIds.includes(deckCard.drawId);
+                                                const overlap = -52; // 越负重叠越多
+                                                return html`
+                                                    <button
+                                                        key=${deckCard.drawId}
+                                                        disabled=${chosen || allSelected}
+                                                        onClick=${() => pickCard(deckCard)}
+                                                        class=${`no-shine relative shrink-0 rounded-xl transition-all duration-300 ease-out ${
+                                                            chosen
+                                                                ? 'opacity-15 -translate-y-2 pointer-events-none'
+                                                                : 'hover:-translate-y-7 hover:scale-[1.05] hover:z-30'
+                                                        }`}
+                                                        style=${{
+                                                            width: CARD_W + 'px',
+                                                            height: CARD_H + 'px',
+                                                            marginLeft: idx === 0 ? '0' : overlap + 'px',
+                                                            zIndex: chosen ? 0 : idx,
+                                                        }}
+                                                        title=${chosen ? '已选择' : `第 ${idx + 1} 张`}
+                                                    >
+                                                        <span class="absolute inset-0 rounded-xl overflow-hidden"
+                                                              style=${{ background: CARD_BACK_BG, boxShadow: chosen ? 'none' : '0 12px 28px -16px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(232,168,76,0.35), inset 0 0 22px rgba(232,168,76,0.08)' }}>
+                                                            <span class="absolute inset-2 rounded-[10px] border border-primary/25 flex items-center justify-center">
+                                                                <span class="material-symbols-outlined text-primary/70" style=${{ fontSize: '28px', fontVariationSettings: "'FILL' 1, 'wght' 500" }}>auto_awesome</span>
+                                                            </span>
+                                                            <span class="absolute top-1.5 left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-[0.3em] text-primary/55 font-black">Lifee</span>
+                                                            <span class="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-[0.3em] text-primary/55 font-black rotate-180">Lifee</span>
+                                                        </span>
+                                                    </button>
+                                                `;
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             ` : null}
 
-                            <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pb-8">
+                            <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pb-6">
                                 <button
                                     onClick=${startDraw}
-                                    class="btn-gradient px-8 py-4 rounded-full text-xs font-black uppercase tracking-[0.25em]"
+                                    class="btn-gradient px-8 py-3.5 rounded-full text-[11px] font-black uppercase tracking-[0.3em]"
                                 >${result ? '重新洗牌' : '开始洗牌'}</button>
                                 ${allSelected ? html`
-                                    <span class="px-8 py-4 rounded-full text-xs font-black uppercase tracking-[0.25em] border border-primary/40 text-primary bg-primary/10">
+                                    <span class="px-8 py-3.5 rounded-full text-[11px] font-black uppercase tracking-[0.3em] border border-primary/45 text-primary bg-primary/10">
                                         正在回到对话…
                                     </span>
                                 ` : null}
