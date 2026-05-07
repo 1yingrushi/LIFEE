@@ -583,6 +583,11 @@
         // 必须放在 ChatArena 顶层 useRef，不能在 VoiceMapSidebar() 函数体里调
         // ——因为那个函数有 early return，会导致 hooks 数量随 showVoiceMap 变化。
         const vmTouchRef = useRef({ pinchDist: 0, pinchScale: 1, panTouchId: null });
+        // pan/scale 的最新快照镜像。setVmPan 在一个 touchmove 里 setState
+        // 后下个 touchmove 之前 closure 还没 re-render，需要 ref 拿到最新
+        // 值才能在 pinch→single-finger 过渡时正确地重置 panRef 起点。
+        const vmPanStateRef = useRef({ x: 0, y: 0 });
+        useEffect(() => { vmPanStateRef.current = vmPan; }, [vmPan]);
         // 区分点击和拖动（>3px 才算拖）。avatar 上的 onClick 据此判断该不该 toggle。
         const vmDragMovedRef = useRef(false);
         // Roadmap 模式下点击小头像可临时展开成 summary 卡（仅当前会话，不持久化）
@@ -2290,6 +2295,14 @@
             };
             const onTouchEnd = (e) => {
                 if (e.touches.length < 2) vmTouchRef.current.pinchDist = 0;
+                // 双指 pinch 结束、还剩一指 → 把 panRef 起点重置到当前手指位置和当前 pan，
+                // 避免下一帧用 pinch 之前的 startX/origX 算出"跳一下"
+                if (e.touches.length === 1 && !cardRef.current.id) {
+                    const t = e.touches[0];
+                    const cur = vmPanStateRef.current;
+                    panRef.current = { dragging: true, startX: t.clientX, startY: t.clientY, origX: cur.x, origY: cur.y };
+                    vmTouchRef.current.panTouchId = t.identifier;
+                }
                 if (e.touches.length === 0) {
                     panRef.current.dragging = false;
                     cardRef.current.id = null;
