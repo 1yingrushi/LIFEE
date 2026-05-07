@@ -2364,11 +2364,17 @@
                     layout[node.id] = { x, y: yCenter - cardHeightOf(node) / 2 };
                     const kids = byParent[node.id] || [];
                     if (!kids.length) return;
+                    // 子节点起点用父节点的"实际可见位置"——cardPos 优先于 layout。
+                    // 否则用户拖过父节点再 Walk 出新孩子时，新孩子按老 layout 落位
+                    // 会盖到旧位置附近的卡。
+                    const parentCardPos = cardPos[`__path_${node.id}`];
+                    const baseX = parentCardPos ? parentCardPos.x : x;
+                    const baseYCenter = parentCardPos ? parentCardPos.y + cardHeightOf(node) / 2 : yCenter;
                     const totalH = kids.reduce((s, c) => s + computeBand(c.id), 0);
-                    let cursor = yCenter - totalH / 2;
+                    let cursor = baseYCenter - totalH / 2;
                     for (const c of kids) {
                         const h = computeBand(c.id);
-                        place(c, x + PATH_COL_GAP, cursor + h / 2);
+                        place(c, baseX + PATH_COL_GAP, cursor + h / 2);
                         cursor += h;
                     }
                 };
