@@ -699,9 +699,6 @@
             'home.mode.values.title':   { en: 'Philosophy',  zh: '哲学' },
             'home.mode.values.desc':    { en: "Don't rush to solve. Sit with the question first.", zh: '不急着解决，先把问题问清楚。' },
             'home.mode.values.placeholder': { en: 'Something worth sitting with...', zh: '值得想很久的那个问题……' },
-            'home.mode.mystical.title': { en: 'Mystical',    zh: '玄学' },
-            'home.mode.mystical.desc':  { en: "When reason runs out, there's another way.", zh: '理性穷尽时，还有一条路。' },
-            'home.mode.mystical.placeholder': { en: "Something you're sensing but can't name...", zh: '感觉到了什么，但说不清……' },
             'home.mystic.pick':         { en: 'Choose a mystical method first.', zh: '请先选择一个玄学方向。' },
             'home.mystic.title':        { en: 'Mystical Reading', zh: '玄学解读' },
             'home.mystic.desc':         { en: 'Use symbols, timing and intuition as a mirror for the question.', zh: '把符号、时机与直觉当作镜子，照见问题的另一面。' },
@@ -2421,10 +2418,6 @@
                 });
             });
 
-            // Mystical sub-mode → persona auto-lock map. Currently only 印占
-            // pins the 印占师 voice; 八字/塔罗 keep free selection until those
-            // analyst personas are wired in.
-            const MYSTIC_LOCK_MAP = { seal: 'seal-master', bazi: 'bazi-master', ziwei: 'ziwei-master', tarot: 'tarot-reader' };
             const getMysticMethod = (p) => {
                 if (!p) return null;
                 const id = String(p.id || '').toLowerCase();
@@ -2435,15 +2428,13 @@
                 if (id === 'tarot-reader' || /塔罗|tarot/.test(id + ' ' + name)) return 'tarot';
                 return String(p.category || '').toUpperCase() === 'MYSTIC' ? 'seal' : null;
             };
-            const isMysticPersona = (p) => !!getMysticMethod(p);
-            const isMysticId = (id) => isMysticPersona(personas.find(p => p.id === id));
 
             // Conversation mode (null = default multi-voice council)
             // 从 localStorage 读上次选择，仅认白名单值；未知值忽略，避免脏数据。
             const [mode, setMode] = useState(() => {
                 try {
                     const saved = window.localStorage.getItem('lifee_home_mode');
-                    return ['ab', 'values', 'mystical'].includes(saved) ? saved : null;
+                    return ['ab', 'values'].includes(saved) ? saved : null;
                 } catch (_) { return null; }
             });
             useEffect(() => {
@@ -2452,63 +2443,11 @@
                     else window.localStorage.removeItem('lifee_home_mode');
                 } catch (_) {}
             }, [mode]);
-            const [mysticType, setMysticType] = useState(null);
-            // Personas the user can't toggle off (e.g. 印占师 while 印占 is active).
-            // Each entry must remain in selectedIds until the lock is released.
-            const [lockedIds, setLockedIds] = useState([]);
-
-            useEffect(() => {
-                const lockId = mode === 'mystical' && mysticType ? (MYSTIC_LOCK_MAP[mysticType] || null) : null;
-                if (mode !== 'mystical') {
-                    setLockedIds(prev => prev.length ? [] : prev);
-                    return;
-                }
-                setLockedIds(prev => {
-                    const next = lockId ? [lockId] : [];
-                    return prev.length === next.length && prev.every((id, i) => id === next[i]) ? prev : next;
-                });
-                setSelectedIds(prev => {
-                    const mysticOnly = prev.filter(isMysticId);
-                    const next = lockId && !mysticOnly.includes(lockId) ? [...mysticOnly, lockId] : mysticOnly;
-                    return next.length === prev.length && next.every((id, i) => id === prev[i]) ? prev : next;
-                });
-                // eslint-disable-next-line react-hooks/exhaustive-deps
-            }, [mode, mysticType, personas.length]);
 
             const toggleSelect = (id) => {
-                const persona = personas.find(p => p.id === id);
-                const isMystic = isMysticPersona(persona);
-                const method = getMysticMethod(persona);
-                const isSelected = selectedIds.includes(id);
-                if (lockedIds.includes(id) && isSelected) return;
-                if (isMystic) {
-                    if (isSelected) {
-                        const nextMysticIds = selectedIds.filter(isMysticId).filter(x => x !== id);
-                        if (nextMysticIds.length === 0) {
-                            setMode(null);
-                            setMysticType(null);
-                            setLockedIds([]);
-                        }
-                        setSelectedIds(prev => prev.filter(isMysticId).filter(x => x !== id));
-                    } else {
-                        setMode('mystical');
-                        if (method) setMysticType(method);
-                        setSelectedIds(prev => {
-                            const base = prev.filter(isMysticId);
-                            return base.includes(id) ? base : [...base, id];
-                        });
-                    }
-                    return;
-                }
-                if (mode === 'mystical') {
-                    setMode(null);
-                    setMysticType(null);
-                    setLockedIds([]);
-                }
-                setSelectedIds(prev => {
-                    const base = prev.filter(x => !isMysticId(x));
-                    return isSelected ? base.filter(x => x !== id) : (base.includes(id) ? base : [...base, id]);
-                });
+                setSelectedIds(prev =>
+                    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+                );
             };
 
             const selectedPersonas = personas.filter(p => selectedIds.includes(p.id));
@@ -2587,7 +2526,6 @@
             };
 
             const selectedMysticMethods = Array.from(new Set([
-                mode === 'mystical' ? mysticType : null,
                 ...selectedPersonas.map(getMysticMethod),
             ].filter(Boolean)));
 
@@ -2950,12 +2888,6 @@
             };
 
             useEffect(() => {
-                if (mode !== 'mystical') return;
-                if (!activeDomains.includes('Mystical')) return;
-                requestAnimationFrame(() => goToDomainName('Mystical'));
-            }, [mode, activeDomains.length, carouselBoxH]);
-
-            useEffect(() => {
                 const el = carouselRef.current;
                 if (!el) return;
                 const scrollHandler = () => {
@@ -3147,16 +3079,6 @@
             const today = new Date();
             const dateLocale = window.__lifeeLocale === 'zh' ? 'zh-CN' : 'en-US';
             const dateStr = today.toLocaleDateString(dateLocale, { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase();
-            const mysticOptions = [
-                { id: 'seal', icon: 'gesture' },
-                { id: 'bazi', icon: 'calendar_month' },
-                { id: 'ziwei', icon: 'auto_awesome' },
-                { id: 'tarot', icon: 'style' },
-            ];
-            const activeMystic = mysticOptions.find(item => item.id === mysticType);
-            const inputPlaceholder = activeMystic
-                ? t(`home.mystic.${activeMystic.id}.placeholder`)
-                : t('home.placeholder');
 
             // 注册第 N 天——created_at 是 Unix 秒；当天算 Day 1，之后逐日加。
             const createdAtSec = user?.created_at;
@@ -3252,7 +3174,6 @@
                                     ${[
                                         { id: 'ab',       icon: 'target' },
                                         { id: 'values',   icon: 'diamond' },
-                                        { id: 'mystical', icon: 'auto_awesome' },
                                     ].map(m => {
                                         const isActive = mode === m.id;
                                         const isTouched = touchedMode === m.id;
@@ -3263,14 +3184,6 @@
                                                     onClick=${() => {
                                                         const nextMode = isActive ? null : m.id;
                                                         setMode(nextMode);
-                                                        if (nextMode === 'mystical') {
-                                                            setSelectedIds(prev => prev.filter(isMysticId));
-                                                            goToDomainName('Mystical');
-                                                        } else {
-                                                            setMysticType(null);
-                                                            setLockedIds([]);
-                                                            setSelectedIds(prev => prev.filter(id => !isMysticId(id)));
-                                                        }
                                                     }}
                                                     class=${`no-shine flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all border ${
                                                         isActive
