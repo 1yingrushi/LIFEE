@@ -207,7 +207,7 @@
 
     <!-- Void-specific component files -->
     <script src="./components/ui.js"></script>
-    <script src="./components/ChatArena.js?v=20260507-clear-drag-flag-on-up"></script>
+    <script src="./components/ChatArena.js?v=20260507-mode-pills"></script>
     <script src="./components/modals.js?v=20260430-mystic-png-avatars"></script>
     <script src="./components/PersonaRecommendModal.js?v=20260504-soul-split"></script>
 
@@ -693,12 +693,12 @@
             'recommend.confirm':        { en: 'Add to My Panel & Continue',                  zh: '加入我的角色库并继续' },
             'recommend.skip':           { en: "Skip — I'll choose my own",                   zh: '跳过 · 我自己挑' },
             'recommend.generatingSoul': { en: 'Creating souls…',                              zh: '正在生成 Soul…' },
-            'home.mode.ab.title':       { en: 'Real Life',   zh: '现实' },
-            'home.mode.ab.desc':        { en: "Bring the dilemma. I'll unpack it with you.", zh: '你说情况，我替你拆开来看。' },
-            'home.mode.ab.placeholder': { en: "The thing you can't decide on...", zh: '让你纠结的那件事……' },
-            'home.mode.values.title':   { en: 'Philosophy',  zh: '哲学' },
-            'home.mode.values.desc':    { en: "Don't rush to solve. Sit with the question first.", zh: '不急着解决，先把问题问清楚。' },
-            'home.mode.values.placeholder': { en: 'Something worth sitting with...', zh: '值得想很久的那个问题……' },
+            'home.mode.ab.title':       { en: 'Decision', zh: '决策' },
+            'home.mode.ab.desc':        { en: 'Can’t decide? See what they would do if they were you.', zh: '犹豫不决吗？看看如果他们是你会怎么做' },
+            'home.mode.ab.placeholder': { en: "The decision you're stuck on...", zh: '让你犹豫不决的那件事……' },
+            'home.mode.values.title':   { en: 'Roundtable', zh: '圆桌讨论' },
+            'home.mode.values.desc':    { en: 'Sit down like friends and talk it through.', zh: '像朋友一样，坐下来闲谈' },
+            'home.mode.values.placeholder': { en: 'Something you want to talk through slowly...', zh: '想像朋友一样慢慢聊的那件事……' },
             'home.mystic.pick':         { en: 'Choose a mystical method first.', zh: '请先选择一个玄学方向。' },
             'home.mystic.title':        { en: 'Mystical Reading', zh: '玄学解读' },
             'home.mystic.desc':         { en: 'Use symbols, timing and intuition as a mirror for the question.', zh: '把符号、时机与直觉当作镜子，照见问题的另一面。' },
@@ -2450,10 +2450,12 @@
                 );
             };
 
-            const selectedPersonas = personas.filter(p => selectedIds.includes(p.id));
+            const personaBadge = (id) => ({
+                'bazi-master': window.__lifeeLocale === 'zh' ? '八字命理' : 'Ba Zi',
+                'ziwei-master': window.__lifeeLocale === 'zh' ? '紫微斗数' : 'Zi Wei',
+            }[id] || null);
 
-            // 触屏 tap 模式 pill 时短暂显示 tooltip（桌面用 group-hover 不需要它）
-            const [touchedMode, setTouchedMode] = useState(null);
+            const selectedPersonas = personas.filter(p => selectedIds.includes(p.id));
 
             // placeholder 模糊互换：cur = 当前文案，prev = 上一条（动画期间共存 ~200ms）
             const curPlaceholder = mode ? t('home.mode.' + mode + '.placeholder') : t('home.placeholder');
@@ -2642,7 +2644,7 @@
                 }
                 // 玄学角色需要在对话中自然追问命盘/出生资料，不在首页弹硬表单。
                 if (selectedMysticRequirements.length > 0) {
-                    (startFreshDebate || (() => setView('debate')))(null);
+                    (startFreshDebate || (() => setView('debate')))(mode);
                     return;
                 }
                 // 其他模式 / 没选模式：直接开推荐 modal 让 LLM 帮挑角色。
@@ -3169,45 +3171,35 @@
                             <!-- 模式 pill（左）+ 已选角色 pill（右）合并到同一行，节约一行垂直空间。
                                  英文标题 What's on your mind? 是两行需要这个 buffer。-->
                             <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 -mt-1 px-1 min-h-[34px]">
-                                <!-- 模式 pill：靠左；hover 出 tooltip 显示一句解释 -->
-                                <div class="flex flex-wrap items-center gap-2">
+                                <!-- 模式 pill：靠左；标题和说明直接露出，避免只靠 hover 才能理解。 -->
+                                <div class="flex flex-wrap items-stretch gap-2 flex-1 min-w-[260px]">
                                     ${[
                                         { id: 'ab',       icon: 'target' },
                                         { id: 'values',   icon: 'diamond' },
                                     ].map(m => {
                                         const isActive = mode === m.id;
-                                        const isTouched = touchedMode === m.id;
                                         return html`
-                                            <div key=${m.id} class="relative group"
-                                                 onTouchStart=${() => { setTouchedMode(m.id); setTimeout(() => setTouchedMode(null), 2200); }}>
+                                            <div key=${m.id} class="relative">
                                                 <button
                                                     onClick=${() => {
                                                         const nextMode = isActive ? null : m.id;
                                                         setMode(nextMode);
                                                     }}
-                                                    class=${`no-shine flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all border ${
+                                                    class=${`no-shine flex items-start gap-2 px-3.5 py-2 rounded-2xl text-left transition-all border min-h-[46px] max-w-[280px] ${
                                                         isActive
-                                                            ? 'border-primary/60 bg-primary/10 text-primary shadow-sm shadow-primary/10'
-                                                            : 'border-white/15 bg-transparent text-on-surface-variant/55 hover:border-white/30 hover:text-on-surface/85'
+                                                            ? 'border-primary/70 bg-primary/15 text-primary shadow-[0_10px_30px_-18px_rgba(232,168,76,0.85)]'
+                                                            : 'border-on-surface/15 bg-surface-container-high/70 text-on-surface/80 hover:border-primary/40 hover:bg-primary/8 hover:text-on-surface'
                                                     }`}
                                                 >
-                                                    <span class="material-symbols-outlined" style=${{ fontSize: '14px' }}>${m.icon}</span>
-                                                    <span>${t('home.mode.' + m.id + '.title')}</span>
+                                                    <span class=${`material-symbols-outlined shrink-0 mt-0.5 ${isActive ? 'text-primary' : 'text-on-surface-variant/55'}`}
+                                                          style=${{ fontSize: '16px', fontVariationSettings: isActive ? "'FILL' 1, 'wght' 600" : "'wght' 400" }}>${m.icon}</span>
+                                                    <span class="min-w-0">
+                                                        <span class="block text-[12px] font-black leading-tight">${t('home.mode.' + m.id + '.title')}</span>
+                                                        <span class=${`block text-[10px] leading-snug mt-0.5 line-clamp-1 ${isActive ? 'text-primary/80' : 'text-on-surface-variant/60'}`}>
+                                                            ${t('home.mode.' + m.id + '.desc')}
+                                                        </span>
+                                                    </span>
                                                 </button>
-                                                <!-- Tooltip：桌面 hover / 移动端点击 2 秒，向下飘出 -->
-                                                <div class=${`pointer-events-none absolute left-1/2 top-full mt-2 z-30
-                                                              -translate-x-1/2 transition-all duration-150 ${
-                                                              isTouched
-                                                                ? 'opacity-100 translate-y-0'
-                                                                : 'opacity-0 -translate-y-1 group-hover:opacity-100 group-hover:translate-y-0'
-                                                            }`}>
-                                                    <!-- 漂浮 tooltip：去三角，改用暖色微光锚点（编辑风、低存在感） -->
-                                                    <div class="px-3.5 py-2 rounded-lg bg-surface-container/90 border border-primary/15 backdrop-blur-md
-                                                                text-[11px] text-on-surface/90 max-w-[260px] w-max text-center leading-relaxed
-                                                                shadow-[0_8px_24px_-6px_rgba(0,0,0,0.45),_0_0_18px_rgba(232,168,76,0.07)]">
-                                                        ${t('home.mode.' + m.id + '.desc')}
-                                                    </div>
-                                                </div>
                                             </div>
                                         `;
                                     })}
@@ -3279,6 +3271,7 @@
                                             ${items.map(p => {
                                                 const isSel = selectedIds.includes(p.id);
                                                 const isHot = hotIdSet.has(p.id);
+                                                const badge = personaBadge(p.id);
                                                 const cardStyle = {
                                                     width: personaCardSize + 'px',
                                                     height: personaCardSize + 'px',
@@ -3322,7 +3315,16 @@
                                                             <div class="flex items-center gap-2">
                                                                 <p class=${`text-[9px] uppercase tracking-[0.25em] font-bold ${isSel ? 'text-primary' : 'text-white/60'}`}>${p.role}</p>
                                                             </div>
-                                                            <p class=${`font-headline text-base font-bold leading-tight mt-0.5 ${isSel ? 'text-primary' : 'text-white'}`}>${p.name}</p>
+                                                            <div class="flex items-center gap-2 mt-0.5">
+                                                                <p class=${`font-headline text-base font-bold leading-tight ${isSel ? 'text-primary' : 'text-white'}`}>${p.name}</p>
+                                                                ${badge ? html`
+                                                                    <span class=${`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold leading-none ${
+                                                                        isSel
+                                                                            ? 'border-primary/60 bg-primary/15 text-primary'
+                                                                            : 'border-white/20 bg-black/35 text-white/80'
+                                                                    }`}>${badge}</span>
+                                                                ` : null}
+                                                            </div>
                                                             <p class="text-[10px] text-white/50 italic leading-snug line-clamp-2 mt-1">"${p.worldview}"</p>
                                                         </div>
                                                     </div>
@@ -3380,7 +3382,7 @@
                             // Commit the enriched situation to context and kick off the debate.
                             if (stagedSituation) setContext(c => ({ ...c, situation: stagedSituation }));
                             setTimeout(() => {
-                                (startFreshDebate || (() => setView('debate')))(null);
+                                (startFreshDebate || (() => setView('debate')))(mode);
                             }, 0);
                         }}
                     />` : null}
