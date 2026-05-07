@@ -2154,6 +2154,10 @@
                 cardRef.current.id = null;
             };
             const startCardDrag = (e, id) => {
+                // 已经在拖另一张卡（多指触摸第二根手指落下时）→ 忽略
+                if (cardRef.current.id) return;
+                // pointerDown 在 touch 上对每根手指都触发；只在主指（第一根）开始拖
+                if (e.pointerType === 'touch' && e.isPrimary === false) return;
                 e.stopPropagation();
                 // 阻止浏览器在 <img> 上触发 HTML5 原生拖拽 / 文本选择 ——
                 // 否则用户按住头像移动会变成"拖图片"，把整张卡片拖飞。
@@ -2216,19 +2220,31 @@
                         y: cy - 40 - (cy - pan.y - 40) * ratio,
                     });
                     setScale(newScale);
-                } else if (e.touches.length === 1 && panRef.current.dragging) {
+                } else if (e.touches.length === 1) {
                     const t = e.touches[0];
-                    if (t.identifier !== vmTouchRef.current.panTouchId) return;
-                    setPan({
-                        x: panRef.current.origX + (t.clientX - panRef.current.startX),
-                        y: panRef.current.origY + (t.clientY - panRef.current.startY),
-                    });
+                    if (cardRef.current.id) {
+                        // 单指拖卡片（startCardDrag 已设 cardRef）
+                        const dx = (t.clientX - cardRef.current.startX) / scale;
+                        const dy = (t.clientY - cardRef.current.startY) / scale;
+                        if (!dragMovedRef.current && Math.hypot(dx, dy) > 3) dragMovedRef.current = true;
+                        setCardPos(prev => ({
+                            ...prev,
+                            [cardRef.current.id]: { x: cardRef.current.origX + dx, y: cardRef.current.origY + dy },
+                        }));
+                    } else if (panRef.current.dragging) {
+                        if (t.identifier !== vmTouchRef.current.panTouchId) return;
+                        setPan({
+                            x: panRef.current.origX + (t.clientX - panRef.current.startX),
+                            y: panRef.current.origY + (t.clientY - panRef.current.startY),
+                        });
+                    }
                 }
             };
             const onTouchEnd = (e) => {
                 if (e.touches.length < 2) vmTouchRef.current.pinchDist = 0;
                 if (e.touches.length === 0) {
                     panRef.current.dragging = false;
+                    cardRef.current.id = null;
                     vmTouchRef.current.panTouchId = null;
                 }
             };
@@ -2567,7 +2583,7 @@
                                                 key=${v.id}
                                                 class="absolute cursor-pointer select-none group z-10"
                                                 style=${{ left: miniPos.x + 'px', top: miniPos.y + 'px' }}
-                                                onMouseDown=${(e) => startCardDrag(e, v.id)}
+                                                onPointerDown=${(e) => startCardDrag(e, v.id)}
                                                 onClick=${toggleExpand}
                                                 title=${`${v.name} · ${v.role || ''}`}
                                             >
@@ -2594,7 +2610,7 @@
                                             <div
                                                 class="absolute w-[255px] cursor-grab active:cursor-grabbing select-none z-20"
                                                 style=${{ left: cardX + 'px', top: cardY + 'px' }}
-                                                onMouseDown=${(e) => startCardDrag(e, v.id)}
+                                                onPointerDown=${(e) => startCardDrag(e, v.id)}
                                             >
                                                 ${cardInner}
                                             </div>
@@ -2602,7 +2618,7 @@
                                             <div
                                                 class="absolute w-11 h-11 rounded-full cursor-pointer z-30"
                                                 style=${{ left: miniPos.x + 'px', top: miniPos.y + 'px' }}
-                                                onMouseDown=${(e) => startCardDrag(e, v.id)}
+                                                onPointerDown=${(e) => startCardDrag(e, v.id)}
                                                 onClick=${toggleExpand}
                                                 title=${`Collapse ${v.name}`}
                                             ></div>
@@ -2617,7 +2633,7 @@
                                         key=${v.id}
                                         class="absolute w-[255px] cursor-grab active:cursor-grabbing select-none"
                                         style=${{ left: pos.x + 'px', top: pos.y + 'px', transform: `rotate(${pos.rotate}deg)`, transformOrigin: 'center center' }}
-                                        onMouseDown=${(e) => startCardDrag(e, v.id)}
+                                        onPointerDown=${(e) => startCardDrag(e, v.id)}
                                     >
                                         ${cardInner}
                                     </div>
@@ -2632,7 +2648,7 @@
                                     top: (cardPos['__user']?.y || 0) + 'px',
                                     transform: `rotate(${cardPos['__user']?.rotate || 0}deg)`,
                                 }}
-                                onMouseDown=${(e) => startCardDrag(e, '__user')}
+                                onPointerDown=${(e) => startCardDrag(e, '__user')}
                             >
                                 <div class="voicemap-card rounded-[20px] bg-primary/10 border border-primary/25 overflow-hidden">
                                     <div class="flex items-center gap-2.5 px-4 pt-3 pb-2.5 border-b border-primary/20">
@@ -2678,7 +2694,7 @@
                                             key=${p.id}
                                             class=${'absolute w-[255px] cursor-grab active:cursor-grabbing select-none transition-opacity duration-200 ' + (dim ? 'opacity-30 hover:opacity-70' : 'opacity-100')}
                                             style=${{ left: pos.x + 'px', top: pos.y + 'px' }}
-                                            onMouseDown=${(e) => startCardDrag(e, id)}
+                                            onPointerDown=${(e) => startCardDrag(e, id)}
                                         >
                                             <div class=${'voicemap-card voicemap-card-bg rounded-[20px] border border-dashed border-on-surface/20 overflow-hidden bg-surface-container-high/30'}>
                                                 <div class=${`px-4 py-2 border-b border-outline/10 flex items-center justify-between gap-2 ${c.bg}`}>
@@ -2722,7 +2738,7 @@
                                         key=${p.id}
                                         class=${'absolute w-[255px] cursor-grab active:cursor-grabbing select-none transition-opacity duration-200 ' + (dim ? 'opacity-30 hover:opacity-70' : 'opacity-100')}
                                         style=${{ left: pos.x + 'px', top: pos.y + 'px' }}
-                                        onMouseDown=${(e) => startCardDrag(e, id)}
+                                        onPointerDown=${(e) => startCardDrag(e, id)}
                                     >
                                         <div class=${'voicemap-card voicemap-card-bg rounded-[20px] border overflow-hidden ' + (isWalked ? 'border-primary/40 ring-1 ring-primary/20' : 'border-outline/15')}>
                                             <div class=${`px-3 py-2 border-b border-outline/15 flex flex-wrap items-center justify-between gap-1.5 ${c.bg}`}>
