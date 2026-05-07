@@ -2148,6 +2148,10 @@
             const onMouseUp = () => {
                 panRef.current.dragging = false;
                 cardRef.current.id = null;
+                // 拖动结束就把 moved flag 也清掉。否则下一次想点按钮时，
+                // 按钮的 stopPropagation 让 startCardDrag 不会跑、moved 卡在 true，
+                // onClick 守卫一票否决，用户得先点卡片空白处才能再点按钮。
+                dragMovedRef.current = false;
             };
             // 拖父节点时，把整个子树后代的"当前可见位置"快照下来，拖动中按 delta 一起平移。
             // 不能只看 cardPos——拖非 __user 父节点时，没 cardPos 的子卡走 layout，layout
@@ -2292,6 +2296,7 @@
                 if (e.touches.length === 0) {
                     panRef.current.dragging = false;
                     cardRef.current.id = null;
+                    dragMovedRef.current = false;
                     vmTouchRef.current.panTouchId = null;
                 }
             };
