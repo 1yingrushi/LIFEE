@@ -593,6 +593,10 @@
         const mapMaxWidth = () => {
             const fallback = typeof window !== 'undefined' ? window.innerWidth : 1280;
             const containerW = chatRootRef.current?.offsetWidth || fallback;
+            // 手机上永远铺满容器（让 close 按钮负责揭出 chat）；左边留 120px 在窄屏没意义
+            if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                return containerW;
+            }
             // Roadmap 模式（pathOptions 已加载 / 正在加载）时铺满容器；
             // 普通 voice map（只摘要）留 120px 给左侧 chat。
             const roadmapMode = pathOptions.length > 0 || pathLoading;
@@ -628,6 +632,13 @@
                 _roadmapEntered.current = false;
             }
         }, [showVoiceMap, pathOptions.length, pathLoading]);
+        // 手机端打开 voice map 时强制全屏（覆盖 localStorage 里的桌面宽度）
+        useEffect(() => {
+            if (!showVoiceMap) return;
+            if (typeof window === 'undefined' || window.innerWidth >= 768) return;
+            const w = chatRootRef.current?.offsetWidth || window.innerWidth;
+            setMapWidth(w);
+        }, [showVoiceMap]);
 
         // ── Refs ──────────────────────────────────────────────────────────────
         const scrollRef        = useRef(null);
@@ -2173,6 +2184,51 @@
                 });
                 setScale(newScale);
             };
+            // Touch: 双指捏合缩放、单指拖移；用 ref 持引用，避免 React state 异步更新跟不上手势
+            const touchRef = useRef({ pinchDist: 0, pinchScale: 1, panTouchId: null });
+            const onTouchStart = (e) => {
+                if (e.touches.length === 2) {
+                    const a = e.touches[0], b = e.touches[1];
+                    touchRef.current.pinchDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+                    touchRef.current.pinchScale = scale;
+                } else if (e.touches.length === 1 && !cardRef.current.id) {
+                    const t = e.touches[0];
+                    panRef.current = { dragging: true, startX: t.clientX, startY: t.clientY, origX: pan.x, origY: pan.y };
+                    touchRef.current.panTouchId = t.identifier;
+                }
+            };
+            const onTouchMove = (e) => {
+                if (e.touches.length === 2 && touchRef.current.pinchDist > 0) {
+                    e.preventDefault();
+                    const a = e.touches[0], b = e.touches[1];
+                    const newDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+                    const newScale = Math.min(2, Math.max(0.3, touchRef.current.pinchScale * (newDist / touchRef.current.pinchDist)));
+                    const rect = canvasRef.current?.getBoundingClientRect();
+                    if (!rect) { setScale(newScale); return; }
+                    const cx = (a.clientX + b.clientX) / 2 - rect.left;
+                    const cy = (a.clientY + b.clientY) / 2 - rect.top;
+                    const ratio = newScale / scale;
+                    setPan({
+                        x: cx - 40 - (cx - pan.x - 40) * ratio,
+                        y: cy - 40 - (cy - pan.y - 40) * ratio,
+                    });
+                    setScale(newScale);
+                } else if (e.touches.length === 1 && panRef.current.dragging) {
+                    const t = e.touches[0];
+                    if (t.identifier !== touchRef.current.panTouchId) return;
+                    setPan({
+                        x: panRef.current.origX + (t.clientX - panRef.current.startX),
+                        y: panRef.current.origY + (t.clientY - panRef.current.startY),
+                    });
+                }
+            };
+            const onTouchEnd = (e) => {
+                if (e.touches.length < 2) touchRef.current.pinchDist = 0;
+                if (e.touches.length === 0) {
+                    panRef.current.dragging = false;
+                    touchRef.current.panTouchId = null;
+                }
+            };
             // Fit-to-view: 把所有卡片的 bbox 居中并缩放到画布大小，保留用户拖动后的
             // 位置（不重置卡片到默认槽位）。卡片宽 255px、高估算 320px（头+三条最近消息）；
             // transform 里有 +40px 偏移要算进 pan 反推。
@@ -2297,12 +2353,12 @@
             return html`
                 <aside class="h-full flex flex-col border-l border-outline/15 bg-surface-dim/40 shrink-0" style=${{ width: Math.min(mapWidth, mapMaxWidth()) + 'px' }}>
                     <!-- Archive header -->
-                    <div class="flex items-center justify-between px-6 h-14 border-b border-outline/15 shrink-0">
-                        <div class="flex items-center gap-2">
-                            <span class="material-symbols-outlined text-primary/60" style=${{ fontSize: '16px' }}>menu_book</span>
-                            <span class="text-[10px] font-black uppercase tracking-[0.35em] text-on-surface-variant/70">${t('chat.voiceMap')}</span>
+                    <div class="flex items-center justify-between px-3 md:px-6 h-12 md:h-14 border-b border-outline/15 shrink-0 gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="material-symbols-outlined text-primary/60 shrink-0" style=${{ fontSize: '16px' }}>menu_book</span>
+                            <span class="text-[10px] font-black uppercase tracking-[0.35em] text-on-surface-variant/70 truncate">${t('chat.voiceMap')}</span>
                         </div>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 shrink-0">
                             <button
                                 onClick=${handleSummary}
                                 disabled=${history.length < 2 || summaryLoading}
@@ -2313,8 +2369,8 @@
                                     ? html`<span class="material-symbols-outlined animate-spin" style=${{ fontSize: '12px' }}>progress_activity</span>`
                                     : html`<span class="material-symbols-outlined" style=${{ fontSize: '12px' }}>summarize</span>`
                                 }
-                                <span>${t('chat.summary')}</span>
-                                <span class="opacity-50">· 1${t('credit.suffix')}</span>
+                                <span class="hidden md:inline">${t('chat.summary')}</span>
+                                <span class="opacity-50 hidden md:inline">· 1${t('credit.suffix')}</span>
                             </button>
                             <button
                                 onClick=${generateRoadmap}
@@ -2326,14 +2382,17 @@
                                     ? html`<span class="material-symbols-outlined animate-spin" style=${{ fontSize: '12px' }}>progress_activity</span>`
                                     : html`<span class="material-symbols-outlined" style=${{ fontSize: '12px' }}>route</span>`
                                 }
-                                <span>${t('chat.roadmap') || 'Roadmap'}</span>
-                                <span class="opacity-50">· 2${t('credit.suffix')}</span>
+                                <span class="hidden md:inline">${t('chat.roadmap') || 'Roadmap'}</span>
+                                <span class="opacity-50 hidden md:inline">· 2${t('credit.suffix')}</span>
                             </button>
                             <button onClick=${reset}
-                                class="no-shine px-2 h-7 rounded-md btn-ghost text-[9px] uppercase tracking-wider"
+                                class="no-shine px-2 h-7 rounded-md btn-ghost text-[9px] uppercase tracking-wider flex items-center"
                                 title="Fit all cards into view"
-                            ><span>${t('chat.reset')}</span></button>
-                            <span class="text-[9px] font-bold text-on-surface-variant/40 w-9 text-center">${Math.round(scale * 100)}%</span>
+                            >
+                                <span class="material-symbols-outlined md:hidden" style=${{ fontSize: '14px' }}>fit_screen</span>
+                                <span class="hidden md:inline">${t('chat.reset')}</span>
+                            </button>
+                            <span class="hidden md:inline text-[9px] font-bold text-on-surface-variant/40 w-9 text-center">${Math.round(scale * 100)}%</span>
                             <button onClick=${() => setShowVoiceMap(false)}
                                 class="w-7 h-7 rounded-md btn-ghost flex items-center justify-center"
                                 title="Close"
@@ -2345,12 +2404,16 @@
                     <div
                         ref=${canvasRef}
                         class="voicemap-canvas flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing"
-                        style=${{}}
+                        style=${{ touchAction: 'none' }}
                         onMouseDown=${onCanvasMouseDown}
                         onMouseMove=${onMouseMove}
                         onMouseUp=${onMouseUp}
                         onMouseLeave=${onMouseUp}
                         onWheel=${onWheel}
+                        onTouchStart=${onTouchStart}
+                        onTouchMove=${onTouchMove}
+                        onTouchEnd=${onTouchEnd}
+                        onTouchCancel=${onTouchEnd}
                     >
                         <div
                             class="absolute top-0 left-0 origin-top-left"
