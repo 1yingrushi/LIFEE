@@ -470,20 +470,6 @@
         const setWebSearchMode = (v) => _patchDS('webSearchMode', v);
         const setMaxSpeakers   = (v) => _patchDS('maxSpeakers', v);
         const setLanguage      = (v) => _patchDS('language', v);
-        const modeInstruction = (mode, lang) => {
-            const isZh = /^zh/i.test(lang || '');
-            if (mode === 'ab') {
-                return isZh
-                    ? '【决策模式】这次对话是为了帮助用户做选择。请结合各自人格给出清晰判断，重点回答：如果你是用户，你会怎么做，以及为什么。可以保留风险和条件，但不要只做抽象讨论。'
-                    : '[Decision Mode] This conversation is meant to help the user decide. Each persona should give a clear judgment: what they would do if they were the user, and why. Include risks and conditions, but do not stay purely abstract.';
-            }
-            if (mode === 'values') {
-                return isZh
-                    ? '【圆桌讨论模式】这次对话更像朋友间的价值观讨论。请帮助用户看清在意什么、害怕什么、想成为什么样的人；不要替用户给出明确选择答案，不要用“你应该选 A/B”收束，最后以开放问题或温和观察结束。'
-                    : '[Roundtable Mode] This conversation is a values-oriented discussion among friends. Help the user clarify what matters, what they fear, and who they want to become. Do not make the final choice for them or conclude with “you should choose A/B”; end with open questions or gentle observations.';
-            }
-            return '';
-        };
         // Pending answers for the latest unanswered follow-up card:
         //   { [questionIdx]: selectedOptionText }
         // Answered follow-ups derive their state from the next user message in history,
@@ -1136,10 +1122,8 @@
                     localStorage.setItem('lifee_lang', lang);
                 }
 
-                const instruction = modeInstruction(initialMode, lang);
-                const payloadSituation = [situation, instruction].filter(Boolean).join('\n\n');
                 const payload = {
-                    situation: payloadSituation || (history.length > 0 ? '' : 'Start the internal debate.'),
+                    situation: situation || (history.length > 0 ? '' : 'Start the internal debate.'),
                     userInput: cleanInput,
                     personas: (selectedPersonas || []).map(p => ({
                         id: p.id, name: p.name,

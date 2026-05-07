@@ -207,7 +207,7 @@
 
     <!-- Void-specific component files -->
     <script src="./components/ui.js"></script>
-    <script src="./components/ChatArena.js?v=20260507-mode-pills"></script>
+    <script src="./components/ChatArena.js?v=20260507-voicemap-drag-descendants"></script>
     <script src="./components/modals.js?v=20260430-mystic-png-avatars"></script>
     <script src="./components/PersonaRecommendModal.js?v=20260504-soul-split"></script>
 
@@ -2644,7 +2644,7 @@
                 }
                 // 玄学角色需要在对话中自然追问命盘/出生资料，不在首页弹硬表单。
                 if (selectedMysticRequirements.length > 0) {
-                    (startFreshDebate || (() => setView('debate')))(mode);
+                    (startFreshDebate || (() => setView('debate')))(null);
                     return;
                 }
                 // 其他模式 / 没选模式：直接开推荐 modal 让 LLM 帮挑角色。
@@ -3382,7 +3382,7 @@
                             // Commit the enriched situation to context and kick off the debate.
                             if (stagedSituation) setContext(c => ({ ...c, situation: stagedSituation }));
                             setTimeout(() => {
-                                (startFreshDebate || (() => setView('debate')))(mode);
+                                (startFreshDebate || (() => setView('debate')))(null);
                             }, 0);
                         }}
                     />` : null}
