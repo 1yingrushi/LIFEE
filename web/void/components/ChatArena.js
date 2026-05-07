@@ -2149,15 +2149,24 @@
                 panRef.current.dragging = false;
                 cardRef.current.id = null;
             };
-            // 拖父节点时，把所有"已经被手动拖过 / 有 cardPos 记录"的后代也跟着平移。
-            // 没 cardPos 的后代用 layout（依赖 __user 位置）渲染，layout 自动跟随，不用管。
+            // 拖父节点时，把整个子树后代的"当前可见位置"快照下来，拖动中按 delta 一起平移。
+            // 不能只看 cardPos——拖非 __user 父节点时，没 cardPos 的子卡走 layout，layout
+            // 不依赖该父节点位置，所以会原地不动。需要把 layout 位置也算进 descOrig，
+            // 拖动时给它们写 cardPos 实现"硬绑定"。
             // 父类型映射：__user → 全部 path 节点；__path_<id> → 该 id 子树
-            const descendantsWithCardPos = (parentDragId) => {
+            const descendantsCurrentPos = (parentDragId) => {
                 const out = {};
+                const posOf = (pathId) => {
+                    const cid = `__path_${pathId}`;
+                    if (cardPos[cid]) return cardPos[cid];
+                    const layout = pathLayout[pathId];
+                    if (layout) return layout;
+                    return null;
+                };
                 if (parentDragId === '__user') {
                     for (const p of pathOptions) {
-                        const cid = `__path_${p.id}`;
-                        if (cardPos[cid]) out[cid] = cardPos[cid];
+                        const pos = posOf(p.id);
+                        if (pos) out[`__path_${p.id}`] = pos;
                     }
                 } else if (typeof parentDragId === 'string' && parentDragId.startsWith('__path_')) {
                     const rootId = parentDragId.slice('__path_'.length);
@@ -2169,8 +2178,8 @@
                         visited.add(cur);
                         for (const p of pathOptions) {
                             if (p.parentId === cur) {
-                                const cid = `__path_${p.id}`;
-                                if (cardPos[cid]) out[cid] = cardPos[cid];
+                                const pos = posOf(p.id);
+                                if (pos) out[`__path_${p.id}`] = pos;
                                 queue.push(p.id);
                             }
                         }
@@ -2205,7 +2214,7 @@
                     startY: e.clientY,
                     origX: pos.x,
                     origY: pos.y,
-                    descOrig: descendantsWithCardPos(id),
+                    descOrig: descendantsCurrentPos(id),
                 };
                 dragMovedRef.current = false;
             };
