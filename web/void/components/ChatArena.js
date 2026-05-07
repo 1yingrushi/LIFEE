@@ -2133,15 +2133,29 @@
                 if (cardRef.current.id) return;
                 panRef.current = { dragging: true, startX: e.clientX, startY: e.clientY, origX: pan.x, origY: pan.y };
             };
+            // 把当前 drag 的 dx/dy 应用到 cardRef.current.id 自己 + 所有曾被手动拖过的后代
+            const applyDragDelta = (dx, dy) => {
+                setCardPos(prev => {
+                    const next = {
+                        ...prev,
+                        [cardRef.current.id]: { x: cardRef.current.origX + dx, y: cardRef.current.origY + dy },
+                    };
+                    const descOrig = cardRef.current.descOrig;
+                    if (descOrig) {
+                        for (const did in descOrig) {
+                            const o = descOrig[did];
+                            next[did] = { x: o.x + dx, y: o.y + dy };
+                        }
+                    }
+                    return next;
+                });
+            };
             const onMouseMove = (e) => {
                 if (cardRef.current.id) {
                     const dx = (e.clientX - cardRef.current.startX) / scale;
                     const dy = (e.clientY - cardRef.current.startY) / scale;
                     if (!dragMovedRef.current && Math.hypot(dx, dy) > 3) dragMovedRef.current = true;
-                    setCardPos(prev => ({
-                        ...prev,
-                        [cardRef.current.id]: { x: cardRef.current.origX + dx, y: cardRef.current.origY + dy },
-                    }));
+                    applyDragDelta(dx, dy);
                 } else if (panRef.current.dragging) {
                     setPan({
                         x: panRef.current.origX + (e.clientX - panRef.current.startX),
@@ -2153,6 +2167,36 @@
                 panRef.current.dragging = false;
                 cardRef.current.id = null;
             };
+            // 拖父节点时，把所有"已经被手动拖过 / 有 cardPos 记录"的后代也跟着平移。
+            // 没 cardPos 的后代用 layout（依赖 __user 位置）渲染，layout 自动跟随，不用管。
+            // 父类型映射：__user → 全部 path 节点；__path_<id> → 该 id 子树
+            const descendantsWithCardPos = (parentDragId) => {
+                const out = {};
+                if (parentDragId === '__user') {
+                    for (const p of pathOptions) {
+                        const cid = `__path_${p.id}`;
+                        if (cardPos[cid]) out[cid] = cardPos[cid];
+                    }
+                } else if (typeof parentDragId === 'string' && parentDragId.startsWith('__path_')) {
+                    const rootId = parentDragId.slice('__path_'.length);
+                    const queue = [rootId];
+                    const visited = new Set();
+                    while (queue.length) {
+                        const cur = queue.shift();
+                        if (visited.has(cur)) continue;
+                        visited.add(cur);
+                        for (const p of pathOptions) {
+                            if (p.parentId === cur) {
+                                const cid = `__path_${p.id}`;
+                                if (cardPos[cid]) out[cid] = cardPos[cid];
+                                queue.push(p.id);
+                            }
+                        }
+                    }
+                }
+                return out;
+            };
+
             const startCardDrag = (e, id) => {
                 // 已经在拖另一张卡（多指触摸第二根手指落下时）→ 忽略
                 if (cardRef.current.id) return;
@@ -2173,7 +2217,14 @@
                     const y = parseFloat(el?.style?.top) || 0;
                     pos = { x, y };
                 }
-                cardRef.current = { id, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+                cardRef.current = {
+                    id,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: pos.x,
+                    origY: pos.y,
+                    descOrig: descendantsWithCardPos(id),
+                };
                 dragMovedRef.current = false;
             };
             const onWheel = (e) => {
@@ -2227,10 +2278,7 @@
                         const dx = (t.clientX - cardRef.current.startX) / scale;
                         const dy = (t.clientY - cardRef.current.startY) / scale;
                         if (!dragMovedRef.current && Math.hypot(dx, dy) > 3) dragMovedRef.current = true;
-                        setCardPos(prev => ({
-                            ...prev,
-                            [cardRef.current.id]: { x: cardRef.current.origX + dx, y: cardRef.current.origY + dy },
-                        }));
+                        applyDragDelta(dx, dy);
                     } else if (panRef.current.dragging) {
                         if (t.identifier !== vmTouchRef.current.panTouchId) return;
                         setPan({
