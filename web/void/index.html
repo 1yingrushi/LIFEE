@@ -2425,6 +2425,18 @@
             // pins the 印占师 voice; 八字/塔罗 keep free selection until those
             // analyst personas are wired in.
             const MYSTIC_LOCK_MAP = { seal: 'seal-master', bazi: 'bazi-master', ziwei: 'ziwei-master', tarot: 'tarot-reader' };
+            const getMysticMethod = (p) => {
+                if (!p) return null;
+                const id = String(p.id || '').toLowerCase();
+                const name = `${p.name || ''} ${p.role || ''}`.toLowerCase();
+                if (id === 'seal-master' || /印占|vedic|seal/.test(id + ' ' + name)) return 'seal';
+                if (id === 'bazi-master' || /八字|bazi|ba zi/.test(id + ' ' + name)) return 'bazi';
+                if (id === 'ziwei-master' || /紫微|紫薇|ziwei|zi wei|zi-wei/.test(id + ' ' + name)) return 'ziwei';
+                if (id === 'tarot-reader' || /塔罗|tarot/.test(id + ' ' + name)) return 'tarot';
+                return String(p.category || '').toUpperCase() === 'MYSTIC' ? 'seal' : null;
+            };
+            const isMysticPersona = (p) => !!getMysticMethod(p);
+            const isMysticId = (id) => isMysticPersona(personas.find(p => p.id === id));
 
             // Conversation mode (null = default multi-voice council)
             // 从 localStorage 读上次选择，仅认白名单值；未知值忽略，避免脏数据。
@@ -2447,24 +2459,56 @@
 
             useEffect(() => {
                 const lockId = mode === 'mystical' && mysticType ? (MYSTIC_LOCK_MAP[mysticType] || null) : null;
-                if (lockId) {
-                    setLockedIds(prev => (prev.length === 1 && prev[0] === lockId ? prev : [lockId]));
-                    setSelectedIds(prev => (prev.includes(lockId) ? prev : [...prev, lockId]));
-                } else {
-                    if (lockedIds.length > 0) {
-                        const releasing = lockedIds;
-                        setLockedIds([]);
-                        setSelectedIds(prev => prev.filter(x => !releasing.includes(x)));
-                    }
+                if (mode !== 'mystical') {
+                    setLockedIds(prev => prev.length ? [] : prev);
+                    return;
                 }
+                setLockedIds(prev => {
+                    const next = lockId ? [lockId] : [];
+                    return prev.length === next.length && prev.every((id, i) => id === next[i]) ? prev : next;
+                });
+                setSelectedIds(prev => {
+                    const mysticOnly = prev.filter(isMysticId);
+                    const next = lockId && !mysticOnly.includes(lockId) ? [...mysticOnly, lockId] : mysticOnly;
+                    return next.length === prev.length && next.every((id, i) => id === prev[i]) ? prev : next;
+                });
                 // eslint-disable-next-line react-hooks/exhaustive-deps
-            }, [mode, mysticType]);
+            }, [mode, mysticType, personas.length]);
 
             const toggleSelect = (id) => {
-                if (lockedIds.includes(id)) return;
-                setSelectedIds(prev =>
-                    prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-                );
+                const persona = personas.find(p => p.id === id);
+                const isMystic = isMysticPersona(persona);
+                const method = getMysticMethod(persona);
+                const isSelected = selectedIds.includes(id);
+                if (lockedIds.includes(id) && isSelected) return;
+                if (isMystic) {
+                    if (isSelected) {
+                        const nextMysticIds = selectedIds.filter(isMysticId).filter(x => x !== id);
+                        if (nextMysticIds.length === 0) {
+                            setMode(null);
+                            setMysticType(null);
+                            setLockedIds([]);
+                        }
+                        setSelectedIds(prev => prev.filter(isMysticId).filter(x => x !== id));
+                    } else {
+                        setMode('mystical');
+                        if (method) setMysticType(method);
+                        setSelectedIds(prev => {
+                            const base = prev.filter(isMysticId);
+                            return base.includes(id) ? base : [...base, id];
+                        });
+                    }
+                    return;
+                }
+                if (mode === 'mystical') {
+                    setMode(null);
+                    setMysticType(null);
+                    setLockedIds([]);
+                }
+                setSelectedIds(prev => {
+                    const base = prev.filter(x => !isMysticId(x));
+                    return isSelected ? base.filter(x => x !== id) : (base.includes(id) ? base : [...base, id]);
+                });
             };
 
             const selectedPersonas = personas.filter(p => selectedIds.includes(p.id));
@@ -2542,23 +2586,9 @@
                 },
             };
 
-            const mysticMethodForPersona = (p) => {
-                if (!p) return null;
-                const id = String(p.id || '').toLowerCase();
-                const name = `${p.name || ''} ${p.role || ''}`.toLowerCase();
-                for (const [method, cfg] of Object.entries(MYSTIC_REQUIREMENTS)) {
-                    if ((cfg.personaIds || []).some(pid => pid.toLowerCase() === id)) return method;
-                }
-                if (/八字|bazi|ba zi/.test(name)) return 'bazi';
-                if (/紫微|紫薇|ziwei|zi wei|zi-wei/.test(name)) return 'ziwei';
-                if (/塔罗|tarot/.test(name)) return 'tarot';
-                if (/印占|vedic|seal/.test(name)) return 'seal';
-                return String(p.category || '').toUpperCase() === 'MYSTIC' ? 'seal' : null;
-            };
-
             const selectedMysticMethods = Array.from(new Set([
                 mode === 'mystical' ? mysticType : null,
-                ...selectedPersonas.map(mysticMethodForPersona),
+                ...selectedPersonas.map(getMysticMethod),
             ].filter(Boolean)));
 
             const selectedMysticRequirements = selectedMysticMethods
@@ -3233,7 +3263,14 @@
                                                     onClick=${() => {
                                                         const nextMode = isActive ? null : m.id;
                                                         setMode(nextMode);
-                                                        if (nextMode === 'mystical') goToDomainName('Mystical');
+                                                        if (nextMode === 'mystical') {
+                                                            setSelectedIds(prev => prev.filter(isMysticId));
+                                                            goToDomainName('Mystical');
+                                                        } else {
+                                                            setMysticType(null);
+                                                            setLockedIds([]);
+                                                            setSelectedIds(prev => prev.filter(id => !isMysticId(id)));
+                                                        }
                                                     }}
                                                     class=${`no-shine flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all border ${
                                                         isActive
