@@ -579,6 +579,10 @@
         const vmCanvasRef = useRef(null);
         const vmPanRef = useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
         const vmCardRef = useRef({ id: null, startX: 0, startY: 0, origX: 0, origY: 0 });
+        // 触摸：双指 pinch 起始距离/scale + 单指 pan 标识。和 vmPanRef 一样
+        // 必须放在 ChatArena 顶层 useRef，不能在 VoiceMapSidebar() 函数体里调
+        // ——因为那个函数有 early return，会导致 hooks 数量随 showVoiceMap 变化。
+        const vmTouchRef = useRef({ pinchDist: 0, pinchScale: 1, panTouchId: null });
         // 区分点击和拖动（>3px 才算拖）。avatar 上的 onClick 据此判断该不该 toggle。
         const vmDragMovedRef = useRef(false);
         // Roadmap 模式下点击小头像可临时展开成 summary 卡（仅当前会话，不持久化）
@@ -2184,25 +2188,24 @@
                 });
                 setScale(newScale);
             };
-            // Touch: 双指捏合缩放、单指拖移；用 ref 持引用，避免 React state 异步更新跟不上手势
-            const touchRef = useRef({ pinchDist: 0, pinchScale: 1, panTouchId: null });
+            // Touch: 双指捏合缩放、单指拖移；vmTouchRef 在 ChatArena 顶层定义（hooks 规则）。
             const onTouchStart = (e) => {
                 if (e.touches.length === 2) {
                     const a = e.touches[0], b = e.touches[1];
-                    touchRef.current.pinchDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-                    touchRef.current.pinchScale = scale;
+                    vmTouchRef.current.pinchDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+                    vmTouchRef.current.pinchScale = scale;
                 } else if (e.touches.length === 1 && !cardRef.current.id) {
                     const t = e.touches[0];
                     panRef.current = { dragging: true, startX: t.clientX, startY: t.clientY, origX: pan.x, origY: pan.y };
-                    touchRef.current.panTouchId = t.identifier;
+                    vmTouchRef.current.panTouchId = t.identifier;
                 }
             };
             const onTouchMove = (e) => {
-                if (e.touches.length === 2 && touchRef.current.pinchDist > 0) {
+                if (e.touches.length === 2 && vmTouchRef.current.pinchDist > 0) {
                     e.preventDefault();
                     const a = e.touches[0], b = e.touches[1];
                     const newDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-                    const newScale = Math.min(2, Math.max(0.3, touchRef.current.pinchScale * (newDist / touchRef.current.pinchDist)));
+                    const newScale = Math.min(2, Math.max(0.3, vmTouchRef.current.pinchScale * (newDist / vmTouchRef.current.pinchDist)));
                     const rect = canvasRef.current?.getBoundingClientRect();
                     if (!rect) { setScale(newScale); return; }
                     const cx = (a.clientX + b.clientX) / 2 - rect.left;
@@ -2215,7 +2218,7 @@
                     setScale(newScale);
                 } else if (e.touches.length === 1 && panRef.current.dragging) {
                     const t = e.touches[0];
-                    if (t.identifier !== touchRef.current.panTouchId) return;
+                    if (t.identifier !== vmTouchRef.current.panTouchId) return;
                     setPan({
                         x: panRef.current.origX + (t.clientX - panRef.current.startX),
                         y: panRef.current.origY + (t.clientY - panRef.current.startY),
@@ -2223,10 +2226,10 @@
                 }
             };
             const onTouchEnd = (e) => {
-                if (e.touches.length < 2) touchRef.current.pinchDist = 0;
+                if (e.touches.length < 2) vmTouchRef.current.pinchDist = 0;
                 if (e.touches.length === 0) {
                     panRef.current.dragging = false;
-                    touchRef.current.panTouchId = null;
+                    vmTouchRef.current.panTouchId = null;
                 }
             };
             // Fit-to-view: 把所有卡片的 bbox 居中并缩放到画布大小，保留用户拖动后的
