@@ -215,10 +215,12 @@
         * { box-sizing: border-box; }
 
         /* iOS / Android 浏览器的地址栏会占掉 100vh 一部分，导致底部输入框被吃掉。
-           换成动态可视高 dvh：浏览器收起/展开 chrome 时实际可视区会自动调。 */
+           换成动态可视高 dvh：浏览器收起/展开 chrome 时实际可视区会自动调。
+           !important 是因为 Tailwind CDN 运行时注入 .h-screen=100vh 的优先级
+           比 head 里的 <style> 高，不强制声明会被覆盖。 */
         @supports (height: 100dvh) {
-            html, body { height: 100dvh; }
-            .h-screen { height: 100dvh; }
+            html, body { height: 100dvh !important; }
+            .h-screen { height: 100dvh !important; }
         }
 
         /* iPhone 全面屏底部 home 指示条避让 */
