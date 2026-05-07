@@ -366,8 +366,17 @@
         return String(p.category || '').toUpperCase() === 'MYSTIC' ? 'seal' : null;
     };
 
-    const hasMysticMaterial = (method, text) => {
+    const TAROT_RESULT_RE = /【塔罗抽牌结果】|\[Tarot Draw Result\]/;
+    const historyHasTarotDrawResult = (hist) =>
+        (hist || []).some(m => TAROT_RESULT_RE.test(m.text || ''));
+    const historyHasTarotInvite = (hist) =>
+        (hist || []).some(m => {
+            try { return !!JSON.parse(m.text || '{}').__lifee_tarot_invite__; } catch (_) { return false; }
+        });
+
+    const hasMysticMaterial = (method, text, hist = []) => {
         const s = text || '';
+        const h = hist || [];
         if (method === 'seal') {
             return s.length > 80 && /(D1|SAV|Ashtakavarga|命盘|截图|pdf|chart|lagna|ascendant|行星|宫位|house)/i.test(s);
         }
@@ -378,6 +387,7 @@
             return /(紫微|紫薇|命宫|身宫|迁移|官禄|财帛|夫妻|四化|chart|palace|birth|出生|截图)/i.test(s) && s.length > 40;
         }
         if (method === 'tarot') {
+            if (historyHasTarotDrawResult(h) || historyHasTarotInvite(h)) return true;
             return s.trim().length > 12;
         }
         return true;
@@ -1121,10 +1131,9 @@
                 const situation = (context?.situation || '').trim();
                 const combinedInput = [situation, cleanInput].filter(Boolean).join('\n\n');
                 const tarotPersona = (selectedPersonas || []).find(p => mysticMethodForPersona(p) === 'tarot');
-                const alreadyHasTarotInvite = history.some(m => {
-                    try { return !!JSON.parse(m.text || '{}').__lifee_tarot_invite__; } catch (_) { return false; }
-                });
-                const hasTarotResult = /【塔罗抽牌结果】|\[Tarot Draw Result\]/.test(combinedInput);
+                const alreadyHasTarotInvite = historyHasTarotInvite(history);
+                const hasTarotResult =
+                    TAROT_RESULT_RE.test(combinedInput) || historyHasTarotDrawResult(history);
                 if (tarotPersona && !hasTarotResult && !alreadyHasTarotInvite) {
                     const spreadKey = chooseTarotSpread(combinedInput);
                     const langForInvite = language || detectLang(combinedInput || '塔罗');
@@ -1148,7 +1157,7 @@
                     const method = mysticMethodForPersona(p);
                     if (!method || seenMysticMethods.has(method)) return;
                     seenMysticMethods.add(method);
-                    if (!hasMysticMaterial(method, combinedInput)) {
+                    if (!hasMysticMaterial(method, combinedInput, history)) {
                         mysticGuides.push({
                             personaId: p.id,
                             text: buildMysticGuide(method, p.name, language || detectLang(combinedInput || cleanInput || situation || '')),
