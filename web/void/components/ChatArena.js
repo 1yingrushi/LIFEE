@@ -2761,8 +2761,13 @@
                                                 <div class=${`px-4 py-2 border-b border-outline/10 flex items-center justify-between gap-2 ${c.bg}`}>
                                                     <span class=${`text-[8px] font-black uppercase tracking-[0.28em] ${c.text} truncate`}>WHAT HAPPENS</span>
                                                     <button
+                                                        onPointerDown=${(e) => e.stopPropagation()}
                                                         onMouseDown=${(e) => e.stopPropagation()}
-                                                        onClick=${() => askRoundtableAbout(p)}
+                                                        onClick=${(e) => {
+                                                            // 卡片刚被拖过 / 处于 drag 过程中 → 这不是有意点击，吞掉
+                                                            if (dragMovedRef.current || cardRef.current.id) { e.preventDefault?.(); return; }
+                                                            askRoundtableAbout(p);
+                                                        }}
                                                         class=${`no-shine text-[7px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap`}
                                                         title="Ask the round table to weigh in on this dilemma"
                                                     >Ask the table →</button>
@@ -2807,16 +2812,24 @@
                                                 <div class="flex flex-wrap items-center gap-1 justify-end">
                                                     ${canWalk && !isWalked ? html`
                                                         <button
+                                                            onPointerDown=${(e) => e.stopPropagation()}
                                                             onMouseDown=${(e) => e.stopPropagation()}
-                                                            onClick=${() => simulatePath(p)}
+                                                            onClick=${(e) => {
+                                                                if (dragMovedRef.current || cardRef.current.id) { e.preventDefault?.(); return; }
+                                                                simulatePath(p);
+                                                            }}
                                                             disabled=${isSimulating}
                                                             class=${`no-shine text-[7px] font-black uppercase tracking-[0.08em] px-1.5 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
                                                             title="Simulate consequences if you walked this path · 3 credits"
                                                         >${isSimulating ? '…' : `Walk 3${t('credit.suffix')}`}</button>
                                                     ` : null}
                                                     <button
+                                                        onPointerDown=${(e) => e.stopPropagation()}
                                                         onMouseDown=${(e) => e.stopPropagation()}
-                                                        onClick=${() => generatePlan(p.label || '')}
+                                                        onClick=${(e) => {
+                                                            if (dragMovedRef.current || cardRef.current.id) { e.preventDefault?.(); return; }
+                                                            generatePlan(p.label || '');
+                                                        }}
                                                         disabled=${planLoading}
                                                         class=${`no-shine text-[7px] font-black uppercase tracking-[0.08em] px-1.5 py-0.5 rounded-full border ${c.bdr} ${c.text} ${c.hover} transition-all whitespace-nowrap disabled:opacity-40`}
                                                         title="Generate full 30-day plan for this path · 3 credits"
