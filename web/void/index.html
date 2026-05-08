@@ -1462,7 +1462,8 @@
                 }
             };
 
-            return html`
+            // Wrap in a single Fragment so React doesn't treat top-level siblings as an un-keyed list.
+            return html`<${React.Fragment}>
                 <div class="fixed inset-0 z-50 flex items-center justify-center">
                     <div class="absolute inset-0 bg-black/70 backdrop-blur-md" onClick=${onClose}></div>
                     <div class="relative w-full max-w-sm mx-4 glass-card rounded-3xl p-8 animate-in iridescent-border">
@@ -1584,7 +1585,7 @@
                         </div>
                     </div>
                 `}
-            `;
+            </${React.Fragment}>`;
         }
 
         // ══════════════════════════════════════════════
