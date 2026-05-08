@@ -3394,6 +3394,13 @@
                                 onClick=${handleSummary}
                             >${summaryLoading ? 'hourglass_empty' : 'summarize'}</span>
 
+                            <!-- Roadmap -->
+                            <span
+                                class=${'material-symbols-outlined cursor-pointer transition-colors ' + (history.length < 2 || pathLoading ? 'opacity-30 pointer-events-none' : 'hover:text-primary') + (pathOptions.length > 0 ? ' text-secondary' : '')}
+                                title=${t('chat.roadmap') || 'Roadmap'}
+                                onClick=${() => { setShowVoiceMap(true); generateRoadmap(); }}
+                            >${pathLoading ? 'hourglass_empty' : 'route'}</span>
+
                             <!-- Share conversation -->
                             <span
                                 class=${'material-symbols-outlined cursor-pointer transition-colors ' + (!(history && history.length) ? 'opacity-30 pointer-events-none' : 'hover:text-primary')}
