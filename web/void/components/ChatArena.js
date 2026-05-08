@@ -649,6 +649,11 @@
         const vmDragMovedRef = useRef(false);
         // Roadmap 模式下点击小头像可临时展开成 summary 卡（仅当前会话，不持久化）
         const [expandedAvatars, setExpandedAvatars] = useState(() => new Set());
+
+        // Auto-generate Roadmap once per session when opening Voice Map.
+        // Users expect the path map to appear like the old UI; when no roadmap is
+        // saved yet we try once (and only once) to generate it.
+        const roadmapAutoTriedRef = useRef({});
         const [showMembersPanel, setShowMembersPanel] = useState(false);
         const [showScrollToBottom, setShowScrollToBottom] = useState(false);
         // Keep ~120px of chat visible so the user can always see there's a chat
@@ -847,6 +852,22 @@
             setIsDebating(false);
             autoStartedRef.current = false;
         }, [parentSessionId]);
+
+        // When the Voice Map opens, ensure Roadmap is available (old behavior).
+        // If the session already has saved nodes, the initialRoadmap sync above
+        // will populate pathOptions and this effect becomes a no-op.
+        useEffect(() => {
+            if (!showVoiceMap) return;
+            if (pathLoading) return;
+            if (pathOptions.length > 0) return;
+            if ((history || []).length < 2) return;
+            const sid = sessionIdRef.current || sessionId || parentSessionId || '';
+            if (!sid) return;
+            if (roadmapAutoTriedRef.current[sid]) return;
+            roadmapAutoTriedRef.current[sid] = true;
+            // Fire and forget; errors surface via pathError toast.
+            try { generateRoadmap(); } catch (_) {}
+        }, [showVoiceMap, pathOptions.length, pathLoading, history.length, sessionId, parentSessionId]);
 
         // pathOptions / walkedPathIds 改了就 PUT 给后端，节流 800ms。
         const roadmapSaveTimerRef = useRef(null);
@@ -2565,6 +2586,23 @@
                         onTouchEnd=${onTouchEnd}
                         onTouchCancel=${onTouchEnd}
                     >
+                        ${!pathLoading && pathOptions.length === 0 ? html`
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div class="pointer-events-auto max-w-xs text-center px-6 py-5 rounded-2xl bg-surface-container/80 border border-outline/15 backdrop-blur-xl shadow-2xl">
+                                    <div class="text-[10px] font-black uppercase tracking-[0.35em] text-on-surface-variant/60">${t('chat.roadmap') || 'Roadmap'}</div>
+                                    <div class="mt-2 text-sm text-on-surface/80 leading-relaxed">
+                                        ${window.__lifeeLocale === 'zh'
+                                            ? '还没有人生路径。点击生成，把这段对话拆成 3–6 条可走的路线。'
+                                            : 'No roadmap yet. Generate 3–6 possible paths from this conversation.'}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick=${() => generateRoadmap()}
+                                        class="mt-4 px-5 py-2 rounded-full btn-gradient text-[11px] font-black uppercase tracking-[0.25em]"
+                                    >${window.__lifeeLocale === 'zh' ? '生成路线图' : 'Generate'}</button>
+                                </div>
+                            </div>
+                        ` : null}
                         <div
                             class="absolute top-0 left-0 origin-top-left"
                             style=${{ transform: `translate(${pan.x + 40}px, ${pan.y + 40}px) scale(${scale})` }}
