@@ -764,7 +764,13 @@
                     return next;
                 }
                 const next = [...prev, msg];
-                if (msg.seq != null) next.sort((a, b) => (a.seq ?? 1e9) - (b.seq ?? 1e9));
+                // Important: don't re-order during SSE streaming. The server and client may
+                // disagree briefly on the next seq, and a global seq sort can move assistant
+                // messages above the just-sent user message. We only sort when syncing from
+                // DB via Realtime while not streaming.
+                if (msg.seq != null && origin === 'realtime' && !isDebatingRef.current) {
+                    next.sort((a, b) => (a.seq ?? 1e9) - (b.seq ?? 1e9));
+                }
                 return next;
             });
         };
