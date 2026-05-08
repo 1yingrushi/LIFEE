@@ -4864,6 +4864,7 @@
 
             /** 圆桌内「新对话」：清空当前会话与首页情境，保留已选角色。 */
             const startNewConversation = useCallback(() => {
+                // Clear conversation state but preserve selectedIds
                 setInitialMode(null);
                 setSessionId(null);
                 setSessionMessages([]);
@@ -4871,6 +4872,7 @@
                 setSessionOptions([]);
                 setSessionRoadmap(null);
                 setContext({ situation: '', landingPeriods: [] });
+                // Stay in debate view with the same personas selected
                 setView('debate');
             }, []);
 

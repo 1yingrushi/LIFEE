@@ -769,7 +769,13 @@
                     return next;
                 }
                 const next = [...prev, msg];
-                if (msg.seq != null) next.sort((a, b) => (a.seq ?? 1e9) - (b.seq ?? 1e9));
+                // Important: don't re-order during SSE streaming. The server and client may
+                // disagree briefly on the next seq, and a global seq sort can move assistant
+                // messages above the just-sent user message. We only sort when syncing from
+                // DB via Realtime while not streaming.
+                if (msg.seq != null && origin === 'realtime' && !isDebatingRef.current) {
+                    next.sort((a, b) => (a.seq ?? 1e9) - (b.seq ?? 1e9));
+                }
                 return next;
             });
         };
@@ -2526,8 +2532,8 @@
                     <!-- Archive header -->
                     <div class="flex items-center justify-between px-3 md:px-6 h-12 md:h-14 border-b border-outline/15 shrink-0 gap-2">
                         <div class="flex items-center gap-2 min-w-0">
-                            <span class="material-symbols-outlined text-primary/60 shrink-0" style=${{ fontSize: '16px' }}>summarize</span>
-                            <span class="text-[10px] font-black uppercase tracking-[0.35em] text-on-surface-variant/70 truncate">人生画布</span>
+                            <span class="material-symbols-outlined text-primary/60 shrink-0" style=${{ fontSize: '16px' }}>menu_book</span>
+                            <span class="text-[10px] font-black uppercase tracking-[0.35em] text-on-surface-variant/70 truncate">${t('chat.voiceMap') || 'Voice Map'}</span>
                         </div>
                         <div class="flex items-center gap-1 shrink-0">
                             <button
@@ -2542,19 +2548,6 @@
                                 }
                                 <span class="hidden md:inline">${t('chat.summary')}</span>
                                 <span class="opacity-50 hidden md:inline">· 1${t('credit.suffix')}</span>
-                            </button>
-                            <button
-                                onClick=${generateRoadmap}
-                                disabled=${history.length < 2 || pathLoading}
-                                class=${`no-shine px-2 h-7 rounded-md btn-ghost text-[9px] uppercase tracking-wider flex items-center gap-1 disabled:opacity-30 ${pathOptions.length > 0 ? 'text-secondary' : ''}`}
-                                title="Sketch 3-6 possible life paths from this conversation · 2 credits"
-                            >
-                                ${pathLoading
-                                    ? html`<span class="material-symbols-outlined animate-spin" style=${{ fontSize: '12px' }}>progress_activity</span>`
-                                    : html`<span class="material-symbols-outlined" style=${{ fontSize: '12px' }}>route</span>`
-                                }
-                                <span class="hidden md:inline">${t('chat.roadmap') || 'Roadmap'}</span>
-                                <span class="opacity-50 hidden md:inline">· 2${t('credit.suffix')}</span>
                             </button>
                             <button onClick=${reset}
                                 class="no-shine px-2 h-7 rounded-md btn-ghost text-[9px] uppercase tracking-wider flex items-center"
@@ -3008,6 +3001,16 @@
                     ref=${moreMenuRef}
                     class="absolute right-0 top-full mt-2 w-64 bg-surface-container/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden"
                 >
+                    ${onStartNewConversation ? html`
+                        <button
+                            type="button"
+                            onClick=${(e) => { e.preventDefault(); e.stopPropagation(); handleStartNewConversation(); }}
+                            class="w-full flex items-center gap-2 px-4 py-3 text-left text-xs font-semibold text-on-surface hover:bg-white/[0.08] active:bg-white/[0.12] border-b border-outline/15 transition-colors"
+                        >
+                            <span class="material-symbols-outlined text-base shrink-0">edit_square</span>
+                            ${t('chat.newConversation')}
+                        </button>
+                    ` : null}
                     <!-- Max speakers select -->
                     ${(selectedPersonas || []).length > 1 ? html`
                         <div class="px-4 py-3 border-b border-outline/15 flex items-center justify-between gap-3">
@@ -3411,11 +3414,15 @@
                         <div class="flex items-center gap-4 text-on-surface-variant/60">
                             <!-- New conversation -->
                             ${onStartNewConversation ? html`
-                                <span
-                                    class="material-symbols-outlined cursor-pointer transition-colors hover:text-primary"
+                                <button
+                                    type="button"
+                                    class="flex items-center gap-1.5 rounded-lg -mr-1 sm:mr-0 px-0 sm:px-1 py-1 text-on-surface-variant/60 hover:text-primary hover:bg-white/5 transition-colors cursor-pointer bg-transparent border-0"
                                     title=${t('chat.newConversation')}
-                                    onClick=${handleStartNewConversation}
-                                >edit_square</span>
+                                    onClick=${(e) => { e.preventDefault(); e.stopPropagation(); handleStartNewConversation(); }}
+                                >
+                                    <span class="material-symbols-outlined" style=${{ fontSize: '22px' }}>edit_square</span>
+                                    <span class="hidden sm:inline text-[10px] font-semibold tracking-wide">${t('chat.newConversation')}</span>
+                                </button>
                             ` : null}
 
                             <!-- Voice Map -->
@@ -3453,7 +3460,7 @@
                             <!-- Share conversation -->
                             <span
                                 class=${'material-symbols-outlined cursor-pointer transition-colors ' + (!(history && history.length) ? 'opacity-30 pointer-events-none' : 'hover:text-primary')}
-                                title=${t('share.title')}
+                                title="分享对话"
                                 onClick=${() => onOpenShare?.({ messages: history, personas: selectedPersonas })}
                             >ios_share</span>
 
