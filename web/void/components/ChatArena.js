@@ -2509,8 +2509,8 @@
                     <!-- Archive header -->
                     <div class="flex items-center justify-between px-3 md:px-6 h-12 md:h-14 border-b border-outline/15 shrink-0 gap-2">
                         <div class="flex items-center gap-2 min-w-0">
-                            <span class="material-symbols-outlined text-primary/60 shrink-0" style=${{ fontSize: '16px' }}>menu_book</span>
-                            <span class="text-[10px] font-black uppercase tracking-[0.35em] text-on-surface-variant/70 truncate">${t('chat.voiceMap')}</span>
+                            <span class="material-symbols-outlined text-primary/60 shrink-0" style=${{ fontSize: '16px' }}>summarize</span>
+                            <span class="text-[10px] font-black uppercase tracking-[0.35em] text-on-surface-variant/70 truncate">人生画布</span>
                         </div>
                         <div class="flex items-center gap-1 shrink-0">
                             <button
