@@ -496,11 +496,6 @@
         setDebateSettings,
         onOpenMobileNav,
     }) => {
-        // Debug: Check if onStartNewConversation prop is received
-        useEffect(() => {
-            console.log('[ChatArena] onStartNewConversation prop:', typeof onStartNewConversation, onStartNewConversation ? '✓' : '✗');
-        }, [onStartNewConversation]);
-
         // ── State ─────────────────────────────────────────────────────────────
         const [history, setHistory]             = useState(initialMessages);
         const [options, setOptions]             = useState(initialOptions || []);
@@ -1097,7 +1092,7 @@
         };
 
         const handleStartNewConversation = async () => {
-            console.log('[ChatArena] handleStartNewConversation called, onStartNewConversation:', typeof onStartNewConversation);
+            if (!onStartNewConversation) return;
             setShowMoreMenu(false);
             setShowVoiceMap(false);
             if (isDebating) await handleStop();
@@ -1106,16 +1101,7 @@
             if (inputFieldRef.current) {
                 inputFieldRef.current.style.height = 'auto';
             }
-            if (typeof onStartNewConversation === 'function') {
-                try {
-                    onStartNewConversation();
-                    console.log('[ChatArena] onStartNewConversation executed successfully');
-                } catch (e) {
-                    console.error('[ChatArena] Error in onStartNewConversation:', e);
-                }
-            } else {
-                console.error('[ChatArena] onStartNewConversation is not a function:', onStartNewConversation);
-            }
+            try { onStartNewConversation(); } catch (_) {}
         };
 
         // ── Core round runner ─────────────────────────────────────────────────

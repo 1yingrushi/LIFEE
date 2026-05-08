@@ -4930,11 +4930,7 @@
 
             // ── Persistent ChatArena: mounted once activated, hidden via CSS when view != debate ──
             const renderChatArena = () => {
-                if (!window.VOID_VIEWS?.debate) {
-                    console.warn('[void/index.html] window.VOID_VIEWS.debate not found');
-                    return null;
-                }
-                console.log('[void/index.html] renderChatArena called, passing startNewConversation:', typeof startNewConversation);
+                if (!window.VOID_VIEWS?.debate) return null;
                 return window.VOID_VIEWS.debate({
                     context,
                     selectedPersonas: displayPersonas.filter(p => selectedIds.includes(p.id)),
