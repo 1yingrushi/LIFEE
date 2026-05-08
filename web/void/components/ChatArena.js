@@ -1086,10 +1086,7 @@
         };
 
         const handleStartNewConversation = async () => {
-            if (!onStartNewConversation) {
-                console.warn('[ChatArena] onStartNewConversation prop not provided');
-                return;
-            }
+            console.log('[ChatArena] handleStartNewConversation called, onStartNewConversation:', typeof onStartNewConversation);
             setShowMoreMenu(false);
             setShowVoiceMap(false);
             if (isDebating) await handleStop();
@@ -1098,10 +1095,15 @@
             if (inputFieldRef.current) {
                 inputFieldRef.current.style.height = 'auto';
             }
-            try {
-                onStartNewConversation();
-            } catch (e) {
-                console.error('[ChatArena] Error in onStartNewConversation:', e);
+            if (typeof onStartNewConversation === 'function') {
+                try {
+                    onStartNewConversation();
+                    console.log('[ChatArena] onStartNewConversation executed successfully');
+                } catch (e) {
+                    console.error('[ChatArena] Error in onStartNewConversation:', e);
+                }
+            } else {
+                console.error('[ChatArena] onStartNewConversation is not a function:', onStartNewConversation);
             }
         };
 
@@ -3383,13 +3385,6 @@
                                     <span class="hidden sm:inline text-[10px] font-semibold tracking-wide">${t('chat.newConversation')}</span>
                                 </button>
                             ` : null}
-
-                            <!-- Voice Map -->
-                            <span
-                                class=${'material-symbols-outlined cursor-pointer transition-colors ' + ((selectedPersonas || []).length === 0 ? 'opacity-30 pointer-events-none' : 'hover:text-primary') + (showVoiceMap ? ' text-primary' : '')}
-                                title="Voice map"
-                                onClick=${() => setShowVoiceMap(v => !v)}
-                            >map</span>
 
                             <!-- Life Canvas (Summary) -->
                             <span
