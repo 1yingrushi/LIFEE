@@ -2502,7 +2502,7 @@
                     <div class="flex items-center justify-between px-3 md:px-6 h-12 md:h-14 border-b border-outline/15 shrink-0 gap-2">
                         <div class="flex items-center gap-2 min-w-0">
                             <span class="material-symbols-outlined text-primary/60 shrink-0" style=${{ fontSize: '16px' }}>menu_book</span>
-                            <span class="text-[10px] font-black uppercase tracking-[0.35em] text-on-surface-variant/70 truncate">${t('chat.voiceMap')}</span>
+                            <span class="text-[10px] font-black uppercase tracking-[0.35em] text-on-surface-variant/70 truncate">人生画布</span>
                         </div>
                         <div class="flex items-center gap-1 shrink-0">
                             <button
@@ -2517,19 +2517,6 @@
                                 }
                                 <span class="hidden md:inline">${t('chat.summary')}</span>
                                 <span class="opacity-50 hidden md:inline">· 1${t('credit.suffix')}</span>
-                            </button>
-                            <button
-                                onClick=${generateRoadmap}
-                                disabled=${history.length < 2 || pathLoading}
-                                class=${`no-shine px-2 h-7 rounded-md btn-ghost text-[9px] uppercase tracking-wider flex items-center gap-1 disabled:opacity-30 ${pathOptions.length > 0 ? 'text-secondary' : ''}`}
-                                title="Sketch 3-6 possible life paths from this conversation · 2 credits"
-                            >
-                                ${pathLoading
-                                    ? html`<span class="material-symbols-outlined animate-spin" style=${{ fontSize: '12px' }}>progress_activity</span>`
-                                    : html`<span class="material-symbols-outlined" style=${{ fontSize: '12px' }}>route</span>`
-                                }
-                                <span class="hidden md:inline">${t('chat.roadmap') || 'Roadmap'}</span>
-                                <span class="opacity-50 hidden md:inline">· 2${t('credit.suffix')}</span>
                             </button>
                             <button onClick=${reset}
                                 class="no-shine px-2 h-7 rounded-md btn-ghost text-[9px] uppercase tracking-wider flex items-center"
@@ -3397,17 +3384,17 @@
                                 onClick=${() => setShowVoiceMap(v => !v)}
                             >map</span>
 
-                            <!-- Summary -->
+                            <!-- Life Canvas (Summary) -->
                             <span
                                 class=${'material-symbols-outlined cursor-pointer transition-colors ' + (history.length < 2 || summaryLoading ? 'opacity-30 pointer-events-none' : 'hover:text-primary')}
-                                title="Summary"
+                                title="人生画布"
                                 onClick=${handleSummary}
                             >${summaryLoading ? 'hourglass_empty' : 'summarize'}</span>
 
                             <!-- Share conversation -->
                             <span
                                 class=${'material-symbols-outlined cursor-pointer transition-colors ' + (!(history && history.length) ? 'opacity-30 pointer-events-none' : 'hover:text-primary')}
-                                title=${t('share.title')}
+                                title="分享对话"
                                 onClick=${() => onOpenShare?.({ messages: history, personas: selectedPersonas })}
                             >ios_share</span>
 

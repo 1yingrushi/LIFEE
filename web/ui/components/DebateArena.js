@@ -760,7 +760,7 @@ const DebateArena = ({
         <div className="flex flex-col h-full">
             {/* Canvas toolbar */}
             <div className="px-4 py-3 flex items-center justify-between border-b border-[#F0EDEA] bg-white shrink-0">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-[#5D576B]/40">VOICE MAP</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-[#5D576B]/40">人生画布</span>
                 <div className="flex items-center gap-1.5">
                     {isABDebate && history.length >= 2 && (
                         <button
@@ -1239,19 +1239,10 @@ const DebateArena = ({
                             }, 300);
                         }}
                         className="flex items-center gap-2 text-xs font-bold text-blue-brand px-4 py-2 border border-blue-brand rounded-full hover:bg-blue-brand hover:text-white transition-all disabled:opacity-30"
+                        title="人生画布"
                     >
-                        <Icon name="FileText" size={14} /> {summaryLoading ? 'Summarizing...' : 'Summary'}
+                        <Icon name="FileText" size={14} /> {summaryLoading ? '生成中...' : '人生画布'}
                     </button>
-                    {isABDebate && history.length >= 4 && (
-                        <button
-                            onClick={() => generatePlan('')}
-                            disabled={planLoading}
-                            className="hidden md:flex items-center gap-2 text-xs font-bold px-4 py-2 border rounded-full transition-all disabled:opacity-40"
-                            style={{ borderColor: '#98A6D4', color: '#98A6D4' }}
-                        >
-                            <Icon name="CalendarDays" size={14} /> {planLoading ? '…' : 'Plan 30 days'}
-                        </button>
-                    )}
                 </div>
             </div>
 
