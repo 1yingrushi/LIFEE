@@ -1361,10 +1361,6 @@
                         }
                         setSummaryData(next);
                         if (!done) setTimeout(tick, 1000 / FPS);
-                        else {
-                            // 摘要完成后，自动生成路径图
-                            setTimeout(() => generateRoadmap(), 500);
-                        }
                     };
                     tick();
                 } else {
