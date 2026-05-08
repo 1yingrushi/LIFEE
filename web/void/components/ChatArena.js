@@ -1086,7 +1086,10 @@
         };
 
         const handleStartNewConversation = async () => {
-            if (!onStartNewConversation) return;
+            if (!onStartNewConversation) {
+                console.warn('[ChatArena] onStartNewConversation prop not provided');
+                return;
+            }
             setShowMoreMenu(false);
             setShowVoiceMap(false);
             if (isDebating) await handleStop();
@@ -1095,7 +1098,11 @@
             if (inputFieldRef.current) {
                 inputFieldRef.current.style.height = 'auto';
             }
-            try { onStartNewConversation(); } catch (_) {}
+            try {
+                onStartNewConversation();
+            } catch (e) {
+                console.error('[ChatArena] Error in onStartNewConversation:', e);
+            }
         };
 
         // ── Core round runner ─────────────────────────────────────────────────
