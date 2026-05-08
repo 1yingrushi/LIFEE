@@ -3388,18 +3388,29 @@
                             >map</span>
 
                             <!-- Summary -->
-                            <span
-                                class=${'material-symbols-outlined cursor-pointer transition-colors ' + (history.length < 2 || summaryLoading ? 'opacity-30 pointer-events-none' : 'hover:text-primary')}
+                            <button
+                                type="button"
+                                class=${'flex items-center gap-1.5 rounded-lg px-1.5 py-1 transition-colors bg-transparent border-0 ' +
+                                    (history.length < 2 || summaryLoading ? 'opacity-30 pointer-events-none' : 'hover:text-primary')}
                                 title="Summary"
                                 onClick=${handleSummary}
-                            >${summaryLoading ? 'hourglass_empty' : 'summarize'}</span>
+                            >
+                                <span class="material-symbols-outlined" style=${{ fontSize: '22px' }}>${summaryLoading ? 'hourglass_empty' : 'summarize'}</span>
+                                <span class="hidden sm:inline text-[10px] font-semibold tracking-wide">${t('chat.summary') || 'Summary'}</span>
+                            </button>
 
                             <!-- Roadmap -->
-                            <span
-                                class=${'material-symbols-outlined cursor-pointer transition-colors ' + (history.length < 2 || pathLoading ? 'opacity-30 pointer-events-none' : 'hover:text-primary') + (pathOptions.length > 0 ? ' text-secondary' : '')}
+                            <button
+                                type="button"
+                                class=${'flex items-center gap-1.5 rounded-lg px-1.5 py-1 transition-colors bg-transparent border-0 ' +
+                                    (history.length < 2 || pathLoading ? 'opacity-30 pointer-events-none' : 'hover:text-primary') +
+                                    (pathOptions.length > 0 ? ' text-secondary' : '')}
                                 title=${t('chat.roadmap') || 'Roadmap'}
                                 onClick=${() => { setShowVoiceMap(true); generateRoadmap(); }}
-                            >${pathLoading ? 'hourglass_empty' : 'route'}</span>
+                            >
+                                <span class="material-symbols-outlined" style=${{ fontSize: '22px' }}>${pathLoading ? 'hourglass_empty' : 'route'}</span>
+                                <span class="hidden sm:inline text-[10px] font-semibold tracking-wide">${t('chat.roadmap') || 'Roadmap'}</span>
+                            </button>
 
                             <!-- Share conversation -->
                             <span
