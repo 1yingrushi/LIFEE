@@ -2962,8 +2962,8 @@
                     ${onStartNewConversation ? html`
                         <button
                             type="button"
-                            onClick=${handleStartNewConversation}
-                            class="w-full flex items-center gap-2 px-4 py-3 text-left text-xs font-semibold text-on-surface hover:bg-white/[0.04] border-b border-outline/15"
+                            onClick=${(e) => { e.preventDefault(); e.stopPropagation(); handleStartNewConversation(); }}
+                            class="w-full flex items-center gap-2 px-4 py-3 text-left text-xs font-semibold text-on-surface hover:bg-white/[0.08] active:bg-white/[0.12] border-b border-outline/15 transition-colors"
                         >
                             <span class="material-symbols-outlined text-base shrink-0">edit_square</span>
                             ${t('chat.newConversation')}
@@ -3374,9 +3374,9 @@
                             ${onStartNewConversation ? html`
                                 <button
                                     type="button"
-                                    class="flex items-center gap-1.5 rounded-lg -mr-1 sm:mr-0 px-0 sm:px-1 py-1 text-on-surface-variant/60 hover:text-primary transition-colors cursor-pointer bg-transparent border-0"
+                                    class="flex items-center gap-1.5 rounded-lg -mr-1 sm:mr-0 px-0 sm:px-1 py-1 text-on-surface-variant/60 hover:text-primary hover:bg-white/5 transition-colors cursor-pointer bg-transparent border-0"
                                     title=${t('chat.newConversation')}
-                                    onClick=${handleStartNewConversation}
+                                    onClick=${(e) => { e.preventDefault(); e.stopPropagation(); handleStartNewConversation(); }}
                                 >
                                     <span class="material-symbols-outlined" style=${{ fontSize: '22px' }}>edit_square</span>
                                     <span class="hidden sm:inline text-[10px] font-semibold tracking-wide">${t('chat.newConversation')}</span>
