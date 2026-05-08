@@ -496,6 +496,11 @@
         setDebateSettings,
         onOpenMobileNav,
     }) => {
+        // Debug: Check if onStartNewConversation prop is received
+        useEffect(() => {
+            console.log('[ChatArena] onStartNewConversation prop:', typeof onStartNewConversation, onStartNewConversation ? '✓' : '✗');
+        }, [onStartNewConversation]);
+
         // ── State ─────────────────────────────────────────────────────────────
         const [history, setHistory]             = useState(initialMessages);
         const [options, setOptions]             = useState(initialOptions || []);
