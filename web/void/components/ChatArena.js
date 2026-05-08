@@ -2034,7 +2034,11 @@
         };
 
         // ── Members panel modal ──────────────────────────────────────────────
-        const MembersPanel = () => {
+        // NOTE: render as plain markup (not a React component). If we define a
+        // component inside ChatArena and mount it as <${MembersPanel} />, React
+        // sees a new component type on every parent render and will remount it,
+        // causing the modal to "flash" while other state (e.g. streaming) updates.
+        const renderMembersPanel = () => {
             if (!showMembersPanel) return null;
 
             const selectedIdSet = new Set((selectedPersonas || []).map(p => p.id));
@@ -3632,7 +3636,7 @@
               ${VoiceMapSidebar()}
 
               <!-- ── Members panel ── -->
-              <${MembersPanel} />
+              ${renderMembersPanel()}
 
               <!-- ── Tarot draw page ── -->
               <${TarotDrawOverlay} invite=${tarotDraw} />
